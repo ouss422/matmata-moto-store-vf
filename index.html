@@ -1,303 +1,2553 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Matmata Moto Store — Gestion</title>
-<style>
-:root{--bg:#f4f5f7;--card:#fff;--tx:#1d2330;--mu:#6b7385;--pr:#d9480f;--bd:#e2e5ea;--ok:#2b8a3e;--ko:#c92a2a}
-@media(prefers-color-scheme:dark){:root{--bg:#14171d;--card:#1d222b;--tx:#e8eaee;--mu:#98a0b0;--bd:#2c323d;--pr:#ff8a4c}}
-*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--tx);display:flex;min-height:100vh}
-nav{width:215px;background:var(--card);border-right:1px solid var(--bd);padding:12px 8px;position:sticky;top:0;height:100vh;overflow:auto;flex:none}
-nav h1{font-size:16px;margin:4px 8px 12px;color:var(--pr)}
-nav a{display:block;padding:9px 12px;border-radius:8px;color:var(--tx);text-decoration:none;margin-bottom:2px}
-nav a.on,nav a:hover{background:var(--pr);color:#fff}
-main{flex:1;padding:18px;min-width:0}
-h2{margin:0 0 14px}h3{margin:18px 0 8px}
-.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
-.k{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}.k small{color:var(--mu)}.k b{display:block;font-size:22px;margin-top:4px}
-.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
-.tw{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{padding:7px 9px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mu);font-weight:600;font-size:12px}
-td.n,th.n{text-align:right}
-input,select,button{font:inherit;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx)}
-button{cursor:pointer}button.p{background:var(--pr);color:#fff;border-color:var(--pr)}button.d{color:var(--ko)}button.s{padding:4px 8px;font-size:12px}
-.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}.bar input[type=search],.bar input.w{flex:1;min-width:150px}
-.tag{padding:2px 8px;border-radius:99px;font-size:12px;background:var(--bd)}.tag.r{background:#ffe3e3;color:var(--ko)}.tag.v{background:#d3f9d8;color:var(--ok)}
-dialog{border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--tx);padding:18px;width:min(520px,94vw)}
-dialog::backdrop{background:#0008}dialog label{display:block;margin:8px 0 3px;color:var(--mu);font-size:12px}dialog input,dialog select{width:100%}
-.hit{border:1px solid var(--bd);border-radius:8px;max-height:220px;overflow:auto}.hit div{padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--bd)}.hit div:hover{background:var(--bd)}
-.best{background:#d3f9d8;color:#1b5e20}
-#pr{display:none}
-@media print{body>*:not(#pr){display:none!important}#pr{display:block!important;color:#000;background:#fff;padding:10px}#pr table{font-size:12px}#pr th,#pr td{border:1px solid #999}}
-@media(max-width:760px){body{flex-direction:column}nav{width:100%;height:auto;position:static;display:flex;flex-wrap:wrap;gap:4px}nav h1{width:100%}nav a{padding:6px 9px}}
-</style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-</head>
-<body>
-<nav id="nav"></nav>
-<main id="m"></main>
-<dialog id="dlg"></dialog>
-<div id="pr"></div>
-<script>
-const $=s=>document.querySelector(s),f=(n,d=2)=>(+n||0).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d}),
-esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),
-today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')},
-now=()=>today()+'T'+new Date().toTimeString().slice(0,5);
-let S,cart=[],pg={},KEY='matmata_v4';
-const PAGES=[['dash','📊 Tableau de bord'],['prod','📦 Produits'],['vente','🛒 Ventes'],['rap','📈 Rapports'],['alert','⚠️ Alertes'],['cmd','🚚 Commandes'],['cmp','⚖️ Comparaison prix'],['four','🏭 Fournisseurs'],['cli','👤 Clients'],['data','💾 Données']];
-const save=()=>localStorage.setItem(KEY,JSON.stringify(S));
-const P=c=>S.products.find(p=>p.code===c);
-const val=p=>p.stock*(p.last||p.buy);
-const isAl=p=>p.stock<=p.thr;
-const mv=(code,type,qty,note)=>S.mvts.push({d:now(),code,type,qty,note:note||''});
+// ============================================================
+//  VOTRE BOUTIQUE — Google Apps Script
+//  Version : 9.0 — Fournisseurs, Clients, Commandes & Comparateur de Prix
+// ============================================================
 
-async function init(){
- const raw=localStorage.getItem(KEY);
- if(raw)S=JSON.parse(raw);
- else{
-  const j=await (await fetch('data.json')).json();
-  S={products:j.products.map(a=>({code:a[0],name:a[1],cat:a[2],buy:a[3],sell:a[4],stock:a[5],thr:a[6],sup:a[7],last:a[8]})),
-   sales:j.sales.map(a=>({id:a[0],d:a[1],code:a[2],name:a[3],price:a[4],qty:a[5],total:a[6],profit:a[7],client:a[8]})),
-   suppliers:j.suppliers.map(a=>({name:a[0],tel:a[1]})),clients:j.clients.map(a=>({name:a[0],tel:a[1]})),orders:[],mvts:[],prices:[]};
-  S.products.forEach(p=>{if(p.sup)S.prices.push({code:p.code,sup:p.sup,price:p.last||p.buy,d:'import'})});
-  save();
- }
- $('#nav').innerHTML='<h1>🏍️ Matmata Moto Store</h1><div style="margin:-8px 8px 10px;font-size:11px;color:var(--mu)">version 5 · 11/10/2026</div>'+PAGES.map(([k,t])=>`<a href="#${k}" data-k="${k}">${t}</a>`).join('');
- addEventListener('hashchange',route);route();
-}
-function route(){
- const k=(location.hash||'#dash').slice(1);
- document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.k===k));
- const fn=R[k]||R.dash;$('#m').innerHTML=fn();if(A[k])A[k]();
-}
-const go=()=>route();
-function modal(html){$('#dlg').innerHTML=html;$('#dlg').showModal()}
-const closeM=()=>$('#dlg').close();
-const rows=(a,fn)=>a.map(fn).join('');
-const opt=(a,sel)=>a.map(x=>`<option ${x===sel?'selected':''}>${esc(x)}</option>`).join('');
+const SHEET_DASHBOARD  = "Page 1 : Tableau de Bord";
+const SHEET_PRODUCTS   = "Page 2 : Produits";
+const SHEET_SALES      = "Page 3 : Ventes";
+const SHEET_REPORTS    = "Page 4 : Rapports";
+const SHEET_DAILY      = "Page 5 : Suivi Journalier";
+const SHEET_SUPPLIERS  = "Page 6 : Fournisseurs";
+const SHEET_CLIENTS    = "Page 7 : Clients";
+const SHEET_ORDERS     = "Page 8 : Commandes";
 
-/* ---------- calculs ---------- */
-function stats(a,b){ // sales between dates (YYYY-MM-DD inclusive)
- const L=S.sales.filter(s=>(!a||s.d.slice(0,10)>=a)&&(!b||s.d.slice(0,10)<=b));
- return{ca:L.reduce((x,s)=>x+s.total,0),pf:L.reduce((x,s)=>x+s.profit,0),n:new Set(L.map(s=>s.id)).size,L};
+const COLOR_HEADER_BG   = "#1A237E";
+const COLOR_HEADER_TEXT = "#FFFFFF";
+const COLOR_ACCENT      = "#FF6F00";
+const COLOR_ALT_ROW     = "#E8EAF6";
+const COLOR_ALERT_BG    = "#FFEBEE";
+const COLOR_OK_BG       = "#E8F5E9";
+const COLOR_KPI_BG      = "#E3F2FD";
+
+
+// ============================================================
+//  1. MENU
+// ============================================================
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("🛠️ Votre Boutique")
+    .addItem("⚙️  Initialiser l'application",    "setupApplication")
+    .addSeparator()
+    .addItem("➕  Ajouter / Modifier un Produit", "showAddProductDialog")
+    .addItem("🛒  Enregistrer une Vente",          "showAddSaleDialog")
+    .addItem("🔄  Actualiser le Tableau de Bord", "refreshDashboard")
+    .addSeparator()
+    .addItem("👤  Ajouter un Client / Fournisseur", "showAddClientSupplierDialog")
+    .addItem("📦  Créer une Commande Fournisseur",  "showOrderDialog")
+    .addItem("🛒  Créer commande depuis les alertes", "showOrderFromAlertsDialog")
+    .addSeparator()
+    .addItem("❌  Annuler une Vente",              "showCancelSaleDialog")
+    .addItem("📅  Voir le Suivi Journalier",       "goToDailySheet")
+    .addSeparator()
+    .addItem("📊  Générer le Rapport Mensuel",    "generateMonthlyReport")
+    .addItem("🔁  Recalculer les colonnes Ventes", "recalculateSalesRowsMenu")
+    .addItem("🔧  Installer les déclencheurs",    "installTriggers")
+    .addToUi();
 }
 
-const R={},A={};
-/* ---------- Tableau de bord ---------- */
-R.dash=()=>{
- const t=stats(today(),today()),all=stats(),al=S.products.filter(isAl).length,m={};
- S.sales.forEach(s=>{const o=m[s.code]||(m[s.code]={code:s.code,name:s.name,q:0,ca:0,pf:0});o.q+=s.qty;o.ca+=s.total;o.pf+=s.profit});
- const top=Object.values(m).sort((a,b)=>b.q-a.q).slice(0,10);
- return`<h2>Tableau de bord</h2><div class="g">
- <div class="k"><small>Valeur totale du stock</small><b>${f(S.products.reduce((x,p)=>x+val(p),0))} DT</b></div>
- <div class="k"><small>Chiffre d'affaires total</small><b>${f(all.ca)} DT</b></div>
- <div class="k"><small>Ventes du jour</small><b>${f(t.ca)} DT</b></div>
- <div class="k"><small>Profit du jour</small><b>${f(t.pf)} DT</b></div>
- <div class="k"><small>Articles en alerte</small><b><a href="#alert" style="color:var(--ko)">${al}</a></b></div></div>
- <div class="c"><h3 style="margin-top:0">🏆 10 meilleurs produits (par quantité vendue)</h3><div class="tw"><table><tr><th>#</th><th>Code</th><th>Désignation</th><th class="n">Qté vendue</th><th class="n">CA (DT)</th><th class="n">Profit (DT)</th></tr>
- ${rows(top,(x,i)=>`<tr><td>${i+1}</td><td>${esc(x.code)}</td><td>${esc(x.name)}</td><td class="n">${f(x.q,0)}</td><td class="n">${f(x.ca)}</td><td class="n">${f(x.pf)}</td></tr>`)}</table></div></div>`;
-};
 
-/* ---------- Produits ---------- */
-const FIELDS={code:'Code article',name:'Désignation',sell:'Prix de vente',buy:"Prix d'achat",stock:'Quantité'};
-function matchP(p,fld,q){q=q.trim().toLowerCase();if(!q)return true;return String(p[fld]).toLowerCase().includes(q.replace(',','.'))}
-R.prod=()=>{pg.prod=pg.prod||{fld:'name',q:'',n:50};return`<h2>Gestion des produits</h2><div class="bar">
- <select id="pf">${Object.entries(FIELDS).map(([k,v])=>`<option value="${k}" ${pg.prod.fld===k?'selected':''}>${v}</option>`).join('')}</select>
- <input type="search" id="pq" placeholder="Rechercher…" value="${esc(pg.prod.q)}"><button class="p" onclick="formP()">+ Ajouter un produit</button><button class="p" onclick="formA()">📥 Nouvel arrivage</button></div>
- <div class="bar"><button onclick="exportX()">⬇ Télécharger la liste (Excel)</button><a href="produits-initiaux.xlsx" download="produits-initiaux.xlsx" style="text-decoration:none"><button type="button">📄 Télécharger la liste d'origine (Excel)</button></a><button class="p" onclick="pickX('add')">📋 Remplir le tableau (Excel)</button><button class="d" onclick="delAll()">🗑 Supprimer tous les produits</button>
- <input type="file" id="xf" accept=".xlsx,.xls,.csv" hidden onchange="importX(this)"></div><div class="c tw" id="pt"></div>`};
-A.prod=()=>{const g=pg.prod;
- $('#pf').onchange=e=>{g.fld=e.target.value;g.n=50;tp()};$('#pq').oninput=e=>{g.q=e.target.value;g.n=50;tp()};tp()};
-function tp(){const g=pg.prod,L=S.products.filter(p=>matchP(p,g.fld,g.q));
- if(!S.products.length){$('#pt').innerHTML='<p style="padding:10px"><b>Le tableau des produits est vide.</b><br>Cliquez sur « 📄 Télécharger la liste d\'origine (Excel) », puis sur « 📋 Remplir le tableau (Excel) » et choisissez ce fichier. Vous pouvez aussi ajouter les produits un par un.</p>';return}
- $('#pt').innerHTML=`<small>${L.length} produit(s)</small><table><tr><th>Code</th><th>Désignation</th><th>Catégorie</th><th class="n">P. achat</th><th class="n">P. vente</th><th class="n">Qté</th><th>Seuil</th><th></th></tr>
- ${rows(L.slice(0,g.n),p=>`<tr><td>${esc(p.code)}</td><td>${esc(p.name)}</td><td>${esc(p.cat)}</td><td class="n">${f(p.buy,3)}</td><td class="n">${f(p.sell,3)}</td>
- <td class="n"><span class="tag ${isAl(p)?'r':'v'}">${p.stock}</span></td><td>${p.thr}</td>
- <td><button class="s" onclick="formP('${esc(p.code)}')">Modifier</button> <button class="s" onclick="formA('${esc(p.code)}')">Arrivage</button> <button class="s" onclick="hist('${esc(p.code)}')">Historique</button> <button class="s d" onclick="delP('${esc(p.code)}')">Suppr.</button></td></tr>`)}</table>
- ${L.length>g.n?`<p><button onclick="pg.prod.n+=100;tp()">Afficher plus (${L.length-g.n})</button></p>`:''}`}
-const cats=(extra)=>[...new Set([...S.products.map(p=>String(p.cat||'').trim()),extra&&String(extra).trim()].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
-function formP(code){const p=code?P(code):{code:'',name:'',cat:'',buy:'',sell:'',stock:0,thr:1,sup:''};
- modal(`<h3 style="margin-top:0">${code?'Modifier':'Nouveau'} produit</h3>
- <label>Code article</label><input id="f1" value="${esc(p.code)}" ${code?'readonly':''}><label>Désignation</label><input id="f2" value="${esc(p.name)}">
- <label>Catégorie</label><select id="f3" onchange="$('#f3n').style.display=this.value==='__new__'?'block':'none'"><option value="">—</option>${opt(cats(p.cat),p.cat)}<option value="__new__">➕ Nouvelle catégorie…</option></select><input id="f3n" placeholder="Nom de la nouvelle catégorie" style="display:none;margin-top:6px"><label>Prix d'achat (DT)</label><input id="f4" type="number" step="0.001" value="${p.buy}">
- <label>Prix de vente (DT)</label><input id="f5" type="number" step="0.001" value="${p.sell}"><label>Quantité en stock</label><input id="f6" type="number" value="${p.stock}">
- <label>Seuil d'alerte</label><input id="f7" type="number" value="${p.thr}"><label>Fournisseur</label><select id="f8"><option value="">—</option>${opt(S.suppliers.map(s=>s.name),p.sup)}</select>
- <p><button class="p" onclick="saveP('${esc(code||'')}')">Enregistrer</button> <button onclick="closeM()">Annuler</button></p>`)}
-function saveP(old){const v=i=>$('#f'+i).value.trim(),code=v(1);
- if(!code||!v(2))return alert('Code et désignation obligatoires');
- if(!old&&P(code))return alert('Ce code existe déjà');
- const cat=$('#f3').value==='__new__'?$('#f3n').value.trim():v(3);
- if($('#f3').value==='__new__'&&!cat)return alert('Saisissez le nom de la nouvelle catégorie');
- const d={name:v(2),cat,buy:+v(4)||0,sell:+v(5)||0,stock:+v(6)||0,thr:+v(7)||0,sup:v(8)};
- if(old){const p=P(old);if(d.stock!==p.stock)mv(old,'Ajustement',d.stock-p.stock,'Modification manuelle');Object.assign(p,d)}
- else{S.products.push({code,last:null,...d});mv(code,'Création',d.stock,'Stock initial')}
- if(d.sup&&d.buy)setPrice(code,d.sup,d.buy);save();closeM();go()}
-function delP(c){if(confirm('Supprimer le produit '+c+' ?')){S.products=S.products.filter(p=>p.code!==c);S.prices=S.prices.filter(x=>x.code!==c);save();tp()}}
-function hist(c){const p=P(c),L=[...S.sales.filter(s=>s.code===c).map(s=>({d:s.d,type:'Vente',qty:-s.qty,note:s.id+' — '+s.client})),...S.mvts.filter(m=>m.code===c)].sort((a,b)=>b.d.localeCompare(a.d));
- modal(`<h3 style="margin-top:0">Historique — ${esc(p.name)}</h3><div class="tw" style="max-height:60vh;overflow:auto"><table><tr><th>Date</th><th>Mouvement</th><th class="n">Qté</th><th>Détail</th></tr>
- ${rows(L,m=>`<tr><td>${m.d.replace('T',' ')}</td><td>${m.type}</td><td class="n">${m.qty>0?'+':''}${m.qty}</td><td>${esc(m.note)}</td></tr>`)||'<tr><td colspan=4>Aucun mouvement</td></tr>'}</table></div><p><button onclick="closeM()">Fermer</button></p>`)}
-function setPrice(code,sup,price){const x=S.prices.find(y=>y.code===code&&y.sup===sup);if(x){x.price=price;x.d=today()}else S.prices.push({code,sup,price,d:today()})}
+// ============================================================
+//  2. DÉCLENCHEURS
+// ============================================================
+function installTriggers() {
+  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger("onEditTrigger")
+    .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onEdit().create();
+  ScriptApp.newTrigger("onChangeTrigger")
+    .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onChange().create();
+  SpreadsheetApp.getUi().alert("✅  Déclencheurs installés !\nLe Tableau de Bord se mettra à jour automatiquement.");
+}
 
-/* ---------- Excel : export / import ---------- */
-const nk=s=>String(s??'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
-function needX(){if(typeof XLSX==='undefined'){alert('Bibliothèque Excel non chargée (connexion internet requise).');return true}}
-function exportX(){if(needX())return;
- const d=S.products.map(p=>({'Code article':p.code,'Désignation':p.name,'Catégorie':p.cat,"Prix d'achat":p.buy,'Prix de vente':p.sell,'Quantité':p.stock,"Seuil d'alerte":p.thr,'Fournisseur':p.sup,"Dernier prix d'achat":p.last||''}));
- const ws=XLSX.utils.json_to_sheet(d),wb=XLSX.utils.book_new();ws['!cols']=[{wch:16},{wch:40},{wch:18},{wch:12},{wch:12},{wch:10},{wch:12},{wch:22}];
- XLSX.utils.book_append_sheet(wb,ws,'Produits');XLSX.writeFile(wb,'produits-'+today()+'.xlsx')}
-function delAll(){const n=S.products.length;
- if(!n)return alert('Le tableau des produits est déjà vide.');
- if(!confirm(`Supprimer les ${n} produits (avec leurs prix fournisseurs et mouvements) ?\n\nUne sauvegarde JSON va être téléchargée automatiquement avant la suppression.\nLes ventes déjà enregistrées sont conservées.`))return;
- if(!confirm('Dernière confirmation : vider complètement le tableau des produits ?'))return;
- try{exportJ()}catch(e){}
- S.products=[];S.prices=[];S.mvts=[];save();alert('Tous les produits ont été supprimés. Utilisez « Remplir le tableau (Excel) » pour importer la nouvelle liste.');go()}
-let xMode='add';
-function pickX(m){xMode=m;const i=$('#xf');i.value='';i.click()}
-const XA={code:['code','sku','reference','ref'],name:['designation','libelle','nomproduit','nomarticle','nom','article'],cat:['categorie','category','famille'],
- last:['dernierprix'],buy:['prixdachat','prixachat'],sell:['prixdevente','prixvente','vente','prix'],
- stock:['stockactuel','quantite','qtestock','stock','qte','qty'],thr:['seuil']};
-const XEX={stock:['initial','vendue','vendu','achetee','alerte'],buy:['dernier'],sell:['achat'],cat:[],name:[],code:[],last:[],thr:[]};
-function mapCols(keys){const map={},used=new Set();
- for(const f of ['code','name','cat','last','buy','sell','stock','thr']){
-  outer:for(const a of XA[f])for(const k of keys){const n=nk(k);if(used.has(k)||!n.startsWith(a)||XEX[f].some(x=>n.includes(x)))continue;map[f]=k;used.add(k);break outer}}
- const sk=keys.find(k=>!used.has(k)&&nk(k).includes('fournisseur'));if(sk)map.sup=sk;return map}
-function importX(inp){const file=inp.files[0];if(!file||needX())return;const r=new FileReader();
- r.onload=()=>{try{
-  const wb=XLSX.read(r.result,{type:'array'});let rows=[];
-  for(const sn of wb.SheetNames){const t=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});if(t.length&&Object.keys(t[0]).some(k=>nk(k).startsWith('code')||nk(k).startsWith('sku'))&&Object.keys(t[0]).some(k=>nk(k).startsWith('designation')||nk(k).startsWith('libelle'))){rows=t;break}}
-  if(!rows.length)rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
-  if(!rows.length)return alert('Fichier vide');
-  const map=mapCols(Object.keys(rows[0]));
-  if(!map.stock&&!confirm('Aucune colonne de quantité (« Stock Actuel » ou « Quantité ») trouvée : les quantités seront mises à 0. Continuer ?'))return;
-  if(!map.code||!map.name)return alert('Colonnes introuvables : le fichier doit contenir au moins « Code article » et « Désignation ».');
-  const num=v=>{const x=parseFloat(String(v).replace(/\s/g,'').replace(',','.'));return isNaN(x)?0:x},seen=new Set(),L=[];let dup=0;
-  rows.forEach(o=>{const code=String(o[map.code]).trim(),name=String(o[map.name]).trim();if(!code||!name)return;let c2=code;if(seen.has(c2)){dup++;let n=2;while(seen.has(code+'-'+n))n++;c2=code+'-'+n}seen.add(c2);
-   const lp=map.last?num(o[map.last]):0;L.push({code:c2,name,cat:map.cat?String(o[map.cat]).trim():'',buy:num(o[map.buy]),sell:num(o[map.sell]),stock:num(o[map.stock]),thr:1,sup:map.sup?String(o[map.sup]).trim():'',last:lp>0?lp:null})});
-  if(!L.length)return alert('Aucun produit valide trouvé');
-  const addPrices=p=>{if(p.sup&&p.buy)setPrice(p.code,p.sup,p.buy)};
-  if(xMode==='replace'){
-   if(!confirm(`Remplacer les ${S.products.length} produits existants par les ${L.length} produits du fichier ?\n(Les ventes sont conservées.) Pensez à exporter une sauvegarde avant.`))return;
-   S.products=L;S.prices=[];L.forEach(addPrices);S.mvts.push({d:now(),code:'—',type:'Remplacement liste',qty:L.length,note:file.name});
-   save();alert(`Liste remplacée : ${L.length} produits.\nQuantité totale en stock : ${f(L.reduce((a,p)=>a+p.stock,0),0)}\nValeur du stock : ${f(L.reduce((a,p)=>a+val(p),0))} DT${dup?`\n${dup} code(s) en double renommé(s) avec un suffixe (-2, -3…).`:''}`);
-  }else{
-   const before=S.products.length;let add=0,skip=0;L.forEach(p=>{if(P(p.code)){skip++;return}S.products.push(p);addPrices(p);mv(p.code,'Import liste',p.stock,file.name);add++});
-   save();alert(`${add} produit(s) ajouté(s).\nTotal : ${S.products.length} produits · quantité en stock ${f(S.products.reduce((a,p)=>a+p.stock,0),0)} · valeur du stock ${f(S.products.reduce((a,p)=>a+val(p),0))} DT${before?'\n(Le tableau n\'était pas vide : les codes déjà présents ont été conservés tels quels. Pour repartir de zéro, supprimez d\'abord tous les produits.)':''}\n${skip?`\n${skip} déjà existant(s) (ignoré(s)).`:''}${dup?`\n${dup} code(s) en double renommé(s) avec un suffixe.`:''}`);
+function onEditTrigger(e) {
+  if (!e) return;
+  const sheet = e.range.getSheet();
+  const sheetName = sheet.getName();
+  if (sheetName === SHEET_SALES) {
+    const col = e.range.getColumn();
+    const row = e.range.getRow();
+    if (row <= 1) return;
+
+    if (col === 3 || col === 6) {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const s  = ss.getSheetByName(SHEET_SALES);
+      const code = s.getRange(row, 3).getValue();
+
+      if (code) {
+        if (col === 3) {
+          if (!s.getRange(row, 1).getValue()) s.getRange(row, 1).setValue(generateSaleId(s));
+          if (!s.getRange(row, 2).getValue()) s.getRange(row, 2).setValue(new Date()).setNumberFormat("DD/MM/YYYY");
+        }
+        const prodSheet = ss.getSheetByName(SHEET_PRODUCTS);
+        const prodData = prodSheet.getDataRange().getValues();
+        let prod = null;
+        for (let i = 1; i < prodData.length; i++) {
+          if (String(prodData[i][0]) === String(code)) {
+            prod = {
+              designation: String(prodData[i][1]),
+              prixAchat:   Number(prodData[i][3]) || 0,
+              prixVente:   Number(prodData[i][4]) || 0
+            };
+            break;
+          }
+        }
+        if (prod) {
+          const qte    = Number(s.getRange(row, 6).getValue()) || 0;
+          const total  = prod.prixVente * qte;
+          const profit = (prod.prixVente - prod.prixAchat) * qte;
+          s.getRange(row, 4).setValue(prod.designation);
+          s.getRange(row, 5).setValue(prod.prixVente).setNumberFormat('#,##0.000 " DT"');
+          s.getRange(row, 7).setValue(total).setNumberFormat('#,##0.000 " DT"');
+          s.getRange(row, 9).setValue(profit).setNumberFormat('#,##0.000 " DT"');
+        } else {
+          s.getRange(row, 4).setValue("Produit inconnu");
+          s.getRange(row, 5).setValue(0);
+          s.getRange(row, 7).setValue(0);
+          s.getRange(row, 9).setValue(0);
+        }
+      }
+    }
   }
-  go()}catch(e){alert('Lecture du fichier impossible : '+e.message)}};
- r.readAsArrayBuffer(file)}
+  if (sheetName === SHEET_PRODUCTS || sheetName === SHEET_SALES)
+    updateDashboardValues();
+}
 
-/* ---------- Nouvel arrivage ---------- */
-function formA(code){const p=code?P(code):null;
- modal(`<h3 style="margin-top:0">📥 Nouvel arrivage</h3><label>Produit</label>
- ${p?`<input id="a1" value="${esc(p.name)}" readonly data-c="${esc(p.code)}">`:`<input id="a1" placeholder="Rechercher un produit…" oninput="aSearch(this.value)"><div class="hit" id="ah" style="display:none"></div>`}
- <div id="ainfo" style="color:var(--mu);margin-top:6px">${p?aInfo(p):''}</div>
- <label>Fournisseur</label><select id="a2">${opt(S.suppliers.map(s=>s.name),p?.sup)}</select>
- <label>Quantité reçue</label><input id="a3" type="number" min="1" value="1" oninput="aPrev()"><label>Nouveau prix d'achat unitaire (DT)</label><input id="a4" type="number" step="0.001" oninput="aPrev()">
- <label>Nouveau prix de vente (optionnel)</label><input id="a5" type="number" step="0.001"><div id="aprev" style="margin-top:8px;font-weight:600"></div>
- <p><button class="p" onclick="saveA()">Enregistrer l'arrivage</button> <button onclick="closeM()">Annuler</button></p>`)}
-const aInfo=p=>`Stock actuel : <b>${p.stock}</b> · Prix d'achat actuel : <b>${f(p.buy,3)} DT</b> · Prix de vente : <b>${f(p.sell,3)} DT</b>`;
-const avg=(p,q,pr)=>p.stock>0?(p.stock*p.buy+q*pr)/(p.stock+q):pr;
-function aSearch(q){q=q.toLowerCase().trim();const h=$('#ah');if(!q){h.style.display='none';return}
- h.style.display='block';h.innerHTML=S.products.filter(p=>p.code.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)).slice(0,12).map(p=>`<div onclick="aPick('${esc(p.code)}')">${esc(p.code)} — ${esc(p.name)}</div>`).join('')}
-function aPick(c){const p=P(c),i=$('#a1');i.value=p.name;i.dataset.c=c;$('#ah').style.display='none';$('#ainfo').innerHTML=aInfo(p);if(p.sup)$('#a2').value=p.sup;aPrev()}
-function aPrev(){const c=$('#a1').dataset.c,q=+$('#a3').value,pr=+$('#a4').value,e=$('#aprev');if(!c||!q||!pr){e.textContent='';return}
- e.textContent='Prix d\'achat moyen calculé : '+f(avg(P(c),q,pr),3)+' DT · Nouveau stock : '+(P(c).stock+q)}
-function saveA(){const c=$('#a1').dataset.c,q=+$('#a3').value,pr=+$('#a4').value,s=$('#a2').value,sp=+$('#a5').value;
- if(!c||q<1||!(pr>0)||!s)return alert('Produit, fournisseur, quantité et prix d\'achat sont obligatoires');
- const p=P(c),nb=avg(p,q,pr);p.buy=Math.round(nb*1000)/1000;p.last=null;p.stock+=q;p.sup=s;if(sp>0)p.sell=sp;
- setPrice(c,s,pr);mv(c,'Arrivage',q,`${s} — ${f(pr,3)} DT/u`);save();closeM();go()}
+function onChangeTrigger() {
+  updateDashboardValues();
+}
 
-/* ---------- Ventes ---------- */
-R.vente=()=>{const t=stats(today(),today());const g={};t.L.forEach(s=>(g[s.id]=g[s.id]||[]).push(s));
- return`<h2>Ventes</h2><div class="g"><div class="k"><small>Ventes du jour</small><b>${f(t.ca)} DT</b></div><div class="k"><small>Profit du jour</small><b>${f(t.pf)} DT</b></div><div class="k"><small>Nombre de ventes</small><b>${t.n}</b></div></div>
- <div class="c"><h3 style="margin-top:0">Nouvelle vente</h3><input class="w" id="sq" placeholder="Rechercher un produit (code ou désignation)…" style="width:100%"><div class="hit" id="sh" style="display:none"></div>
- <div class="tw" id="cart"></div></div>
- <div class="c"><h3 style="margin-top:0">Ventes d'aujourd'hui</h3><div class="tw"><table><tr><th>N°</th><th>Heure</th><th>Client</th><th>Articles</th><th class="n">Total</th><th class="n">Profit</th><th></th></tr>
- ${rows(Object.entries(g).reverse(),([id,l])=>`<tr><td>${id}</td><td>${l[0].d.slice(11)}</td><td>${esc(l[0].client)}</td><td>${l.map(x=>esc(x.name)+' ×'+x.qty).join(', ')}</td><td class="n">${f(l.reduce((a,x)=>a+x.total,0))}</td><td class="n">${f(l.reduce((a,x)=>a+x.profit,0))}</td><td><button class="s d" onclick="cancelS('${id}')">Annuler</button></td></tr>`)||'<tr><td colspan=7>Aucune vente aujourd\'hui</td></tr>'}</table></div></div>`};
-A.vente=()=>{rc();$('#sq').oninput=e=>{const q=e.target.value.toLowerCase().trim(),h=$('#sh');
- if(!q){h.style.display='none';return}
- const L=S.products.filter(p=>p.code.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)).slice(0,15);
- h.style.display='block';h.innerHTML=L.map(p=>`<div onclick="addC('${esc(p.code)}')">${esc(p.code)} — ${esc(p.name)} <small>(stock ${p.stock} · ${f(p.sell,3)} DT)</small></div>`).join('')||'<div>Aucun résultat</div>'}};
-function addC(c){const x=cart.find(l=>l.code===c);if(x)x.qty++;else cart.push({code:c,qty:1,price:P(c).sell});$('#sq').value='';$('#sh').style.display='none';rc()}
-function rc(){$('#cart').innerHTML=cart.length?`<table><tr><th>Article</th><th>Stock</th><th>Prix</th><th>Qté</th><th class="n">Total</th><th></th></tr>
- ${rows(cart,(l,i)=>{const p=P(l.code);return`<tr><td>${esc(p.name)}</td><td>${p.stock}</td><td><input type="number" step="0.001" value="${l.price}" style="width:90px" onchange="cart[${i}].price=+this.value;rc()"></td>
- <td><input type="number" min="1" value="${l.qty}" style="width:70px" onchange="cart[${i}].qty=Math.max(1,+this.value||1);rc()"></td><td class="n">${f(l.price*l.qty)}</td><td><button class="s d" onclick="cart.splice(${i},1);rc()">✕</button></td></tr>`})}</table>
- <div class="bar" style="margin-top:10px"><select id="scl">${opt(S.clients.map(c=>c.name))}</select><select id="spm"><option>Espèces</option><option>Carte</option><option>Chèque</option></select>
- <b style="margin-left:auto;font-size:18px">Total : ${f(cart.reduce((a,l)=>a+l.price*l.qty,0))} DT</b><button class="p" onclick="valid()">✔ Valider la vente</button><button onclick="cart=[];rc()">Vider</button></div>`:'<p style="color:var(--mu)">Panier vide — recherchez un produit pour l\'ajouter.</p>'}
-function valid(){
- for(const l of cart){const p=P(l.code);if(l.qty>p.stock&&!confirm(`Stock insuffisant pour ${p.name} (${p.stock}). Continuer ?`))return}
- const nums=S.sales.map(s=>+String(s.id).replace(/\D/g,'')).filter(Boolean),id='VTE-'+(Math.max(0,...nums)+1),cl=$('#scl').value,d=now();
- cart.forEach(l=>{const p=P(l.code);S.sales.push({id,d,code:p.code,name:p.name,price:l.price,qty:l.qty,total:l.price*l.qty,profit:(l.price-(p.last||p.buy))*l.qty,client:cl});p.stock-=l.qty});
- cart=[];save();go()}
-function cancelS(id){if(!confirm('Annuler la vente '+id+' ? Le stock sera restitué.'))return;
- S.sales.filter(s=>s.id===id).forEach(s=>{const p=P(s.code);if(p){p.stock+=s.qty;mv(s.code,'Annulation vente',s.qty,id)}});S.sales=S.sales.filter(s=>s.id!==id);save();go()}
 
-/* ---------- Rapports ---------- */
-R.rap=()=>{pg.rap=pg.rap||{m:'today',a:today(),b:today()};const g=pg.rap;
- const[a,b]=g.m==='today'?[today(),today()]:g.m==='all'?[null,null]:[g.a,g.b],t=stats(a,b),days={};
- t.L.forEach(s=>{const k=s.d.slice(0,10),o=days[k]||(days[k]={ca:0,pf:0,ids:new Set()});o.ca+=s.total;o.pf+=s.profit;o.ids.add(s.id)});
- const lbl=g.m==='today'?"Aujourd'hui ("+today()+")":g.m==='all'?'Total':'Du '+g.a+' au '+g.b;
- return`<h2>Rapports</h2><div class="bar"><select onchange="pg.rap.m=this.value;go()"><option value="today" ${g.m=='today'?'selected':''}>Aujourd'hui</option><option value="per" ${g.m=='per'?'selected':''}>Période précise</option><option value="all" ${g.m=='all'?'selected':''}>Total</option></select>
- ${g.m==='per'?`Du <input type="date" value="${g.a}" onchange="pg.rap.a=this.value;go()"> au <input type="date" value="${g.b}" onchange="pg.rap.b=this.value;go()">`:''}<button class="p" onclick="printRap()" style="margin-left:auto">🖨 Imprimer</button></div>
- <div id="rp"><h3 style="margin-top:0">Rapport — ${lbl}</h3><div class="g"><div class="k"><small>Chiffre d'affaires</small><b>${f(t.ca)} DT</b></div><div class="k"><small>Profit</small><b>${f(t.pf)} DT</b></div><div class="k"><small>Nombre de ventes</small><b>${t.n}</b></div></div>
- <div class="c tw"><table><tr><th>Date</th><th class="n">Ventes</th><th class="n">CA (DT)</th><th class="n">Profit (DT)</th></tr>${rows(Object.entries(days).sort().reverse().slice(0,200),([k,o])=>`<tr><td>${k}</td><td class="n">${o.ids.size}</td><td class="n">${f(o.ca)}</td><td class="n">${f(o.pf)}</td></tr>`)}</table></div></div>`};
+// ============================================================
+//  3. MOTEUR TABLEAU DE BORD
+// ============================================================
+function updateDashboardValues() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dbSheet   = ss.getSheetByName(SHEET_DASHBOARD);
+  const prodSheet = ss.getSheetByName(SHEET_PRODUCTS);
+  const salesSheet= ss.getSheetByName(SHEET_SALES);
+  if (!dbSheet || !prodSheet || !salesSheet) return;
 
-/* ---------- Fournisseurs / Clients ---------- */
-const person=(key,title,col)=>()=>`<h2>${title}</h2><div class="c"><div class="bar"><input class="w" id="pn" placeholder="Nom"><input id="pt2" placeholder="Téléphone (optionnel)"><button class="p" onclick="addPerson('${col}')">+ Ajouter</button></div>
- <div class="tw"><table><tr><th>Nom</th><th>Téléphone</th><th></th></tr>${rows(S[col],(x,i)=>`<tr><td>${esc(x.name)}</td><td>${esc(x.tel)}</td><td><button class="s d" onclick="delPerson('${col}',${i})">Suppr.</button></td></tr>`)}</table></div></div>`;
-R.four=person('four','Fournisseurs','suppliers');R.cli=person('cli','Clients','clients');
-function addPerson(c){const n=$('#pn').value.trim();if(!n)return alert('Nom obligatoire');S[c].push({name:n,tel:$('#pt2').value.trim()});save();go()}
-function delPerson(c,i){if(confirm('Supprimer ?')){S[c].splice(i,1);save();go()}}
+  const prodData  = prodSheet.getDataRange().getValues();
 
-/* ---------- Alertes ---------- */
-R.alert=()=>{const L=S.products.filter(isAl).sort((a,b)=>a.stock-b.stock);
- return`<h2>Produits en alerte (${L.length})</h2><div class="c tw"><table><tr><th>Code</th><th>Désignation</th><th class="n">Stock</th><th class="n">Seuil</th><th>Fournisseur</th><th></th></tr>
- ${rows(L.slice(0,300),p=>`<tr><td>${esc(p.code)}</td><td>${esc(p.name)}</td><td class="n"><span class="tag r">${p.stock}</span></td><td class="n">${p.thr}</td><td>${esc(p.sup)}</td><td><button class="s p" onclick="formO('${esc(p.code)}')">Commander</button></td></tr>`)}</table>${L.length>300?'<small>300 premiers affichés (les plus critiques)</small>':''}</div>`};
+  // ★ Construire qteVendueMap en excluant les ventes ANNULÉES (col K = "ANNULÉ")
+  const salesDataForStock = salesSheet.getDataRange().getValues();
+  const qteVendueMap = {};
+  for (let i = 1; i < salesDataForStock.length; i++) {
+    const r = salesDataForStock[i];
+    if (!r[2]) continue;
+    // ★ Ignorer les lignes annulées (col K, index 10)
+    if (String(r[10]).trim().toUpperCase() === "ANNULÉ") continue;
+    const code = String(r[2]);
+    qteVendueMap[code] = (qteVendueMap[code] || 0) + (Number(r[5]) || 0);
+  }
 
-/* ---------- Impression ---------- */
-function printDoc(html){const p=$('#pr');p.innerHTML=`<h2 style="margin:0">Matmata Moto Store</h2><small>Imprimé le ${new Date().toLocaleString('fr-FR')}</small><hr>`+html;
- window.onafterprint=()=>{p.innerHTML=''};setTimeout(()=>window.print(),50)}
-const orderDoc=o=>`<h3>Bon de commande n° ${o.id}</h3><p>Date : ${o.d.replace('T',' ')}<br>Fournisseur : <b>${esc(o.sup)}</b></p><table><tr><th>Code</th><th>Désignation</th><th>Qté</th><th>Prix unit. (DT)</th><th>Total (DT)</th></tr>
- <tr><td>${esc(o.code)}</td><td>${esc(o.name)}</td><td>${o.qty}</td><td>${o.price?f(o.price,3):'—'}</td><td>${o.price?f(o.price*o.qty,3):'—'}</td></tr></table>`;
-function printRap(){printDoc($('#rp').innerHTML)}
+  let valeurStock = 0, nbProduits = 0, nbAlertes = 0;
+  const alertRows = [];
+  const prixAchatMap = {};
 
-/* ---------- Commandes ---------- */
-R.cmd=()=>`<h2>Commandes</h2><div class="bar"><button class="p" onclick="formO()">+ Commander</button></div><div class="c tw"><table><tr><th>N°</th><th>Date</th><th>Produit</th><th>Fournisseur</th><th class="n">Qté</th><th class="n">Prix unit.</th><th>Statut</th><th></th></tr>
- ${rows([...S.orders].reverse(),o=>`<tr><td>${o.id}</td><td>${o.d.replace('T',' ')}</td><td>${esc(o.name)}</td><td>${esc(o.sup)}</td><td class="n">${o.qty}</td><td class="n">${o.price?f(o.price,3):'—'}</td><td><span class="tag ${o.st==='Reçue'?'v':''}">${o.st}</span></td>
- <td><button class="s" onclick="printDoc(orderDoc(S.orders.find(x=>x.id==${o.id})))">🖨 Imprimer</button> ${o.st==='Commandée'?`<button class="s" onclick="recv(${o.id})">Marquer reçue</button> <button class="s d" onclick="delO(${o.id})">Annuler</button>`:''}</td></tr>`)||'<tr><td colspan=8>Aucune commande</td></tr>'}</table></div>`;
-function formO(code){const p=code?P(code):null,sg=p?Math.max(1,p.thr*2-p.stock):1,best=p&&S.prices.filter(x=>x.code===code).sort((a,b)=>a.price-b.price)[0];
- modal(`<h3 style="margin-top:0">Nouvelle commande</h3><label>Produit</label>
- ${p?`<input id="o1" value="${esc(p.name)}" readonly data-c="${esc(p.code)}">`:`<input id="o1" placeholder="Rechercher un produit…" oninput="oSearch(this.value)"><div class="hit" id="oh" style="display:none"></div>`}
- <label>Fournisseur</label><select id="o2">${opt(S.suppliers.map(s=>s.name),(best&&best.sup)||p?.sup)}</select>
- <label>Quantité</label><input id="o3" type="number" min="1" value="${sg}"><label>Prix d'achat unitaire (optionnel)</label><input id="o4" type="number" step="0.001" value="${best?best.price:''}">
- <p><button class="p" onclick="saveO()">Valider la commande</button> <button onclick="saveO(true)">Valider et imprimer</button> <button onclick="closeM()">Annuler</button></p>`)}
-function oSearch(q){q=q.toLowerCase().trim();const h=$('#oh');if(!q){h.style.display='none';return}
- h.style.display='block';h.innerHTML=S.products.filter(p=>p.code.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)).slice(0,12).map(p=>`<div onclick="oPick('${esc(p.code)}')">${esc(p.code)} — ${esc(p.name)}</div>`).join('')}
-function oPick(c){const i=$('#o1');i.value=P(c).name;i.dataset.c=c;$('#oh').style.display='none'}
-function saveO(pr){const c=$('#o1').dataset.c,q=+$('#o3').value,s=$('#o2').value;if(!c||!s||q<1)return alert('Produit, fournisseur et quantité requis');
- S.orders.push({id:Math.max(0,...S.orders.map(o=>o.id))+1,d:now(),code:c,name:P(c).name,sup:s,qty:q,price:+$('#o4').value||0,st:'Commandée'});const o=S.orders[S.orders.length-1];save();closeM();location.hash='#cmd';go();if(pr)printDoc(orderDoc(o))}
-function recv(id){const o=S.orders.find(x=>x.id===id),p=P(o.code);o.st='Reçue';if(p){p.stock+=o.qty;mv(o.code,'Réception commande',o.qty,'Cmd #'+id+' — '+o.sup);if(o.price){p.last=o.price;setPrice(o.code,o.sup,o.price)}}save();go()}
-function delO(id){if(confirm('Annuler cette commande ?')){S.orders=S.orders.filter(o=>o.id!==id);save();go()}}
+  for (let i = 1; i < prodData.length; i++) {
+    const r = prodData[i];
+    if (!r[0]) continue;
+    nbProduits++;
+    const code        = String(r[0]);
+    const prixAchat   = Number(r[3]) || 0;
+    const prixVente   = Number(r[4]) || 0;
+    const stockInitial= Number(r[5]) || 0;
+    const seuil       = Number(r[8]) || 0;
+    const stockActuel = stockInitial - (qteVendueMap[code] || 0);
+    prixAchatMap[code] = prixAchat;
+    valeurStock += prixAchat * Math.max(stockActuel, 0);
+    if (stockActuel <= seuil) {
+      nbAlertes++;
+      alertRows.push([code, String(r[1]), String(r[2]), stockActuel, seuil, "⚠️ ALERTE"]);
+    }
+  }
 
-/* ---------- Comparaison de prix ---------- */
-R.cmp=()=>`<h2>Comparaison de prix</h2><div class="c"><input class="w" id="cq" placeholder="Rechercher un produit…" style="width:100%"><div class="hit" id="ch" style="display:none"></div></div><div id="cr"></div>`;
-A.cmp=()=>{$('#cq').oninput=e=>{const q=e.target.value.toLowerCase().trim(),h=$('#ch');if(!q){h.style.display='none';return}
- h.style.display='block';h.innerHTML=S.products.filter(p=>p.code.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)).slice(0,15).map(p=>`<div onclick="cmpShow('${esc(p.code)}')">${esc(p.code)} — ${esc(p.name)}</div>`).join('')};if(pg.cmp)cmpShow(pg.cmp)};
-function cmpShow(c){pg.cmp=c;const p=P(c);$('#ch').style.display='none';$('#cq').value=p.name;
- const L=S.prices.filter(x=>x.code===c).sort((a,b)=>a.price-b.price);
- $('#cr').innerHTML=`<div class="c"><b>${esc(p.name)}</b> — prix de vente ${f(p.sell,3)} DT<div class="tw"><table><tr><th>Fournisseur</th><th class="n">Prix d'achat (DT)</th><th class="n">Marge</th><th>Mis à jour</th></tr>
- ${rows(L,(x,i)=>`<tr class="${i===0?'best':''}"><td>${esc(x.sup)} ${i===0?'⭐ le moins cher':''}</td><td class="n">${f(x.price,3)}</td><td class="n">${f(p.sell-x.price,3)}</td><td>${x.d}</td></tr>`)||'<tr><td colspan=4>Aucun prix enregistré</td></tr>'}</table></div>
- <div class="bar" style="margin-top:10px"><select id="cs">${opt(S.suppliers.map(s=>s.name))}</select><input id="cp" type="number" step="0.001" placeholder="Prix d'achat"><button onclick="addPrice('${esc(c)}')">+ Ajouter / mettre à jour un prix</button></div></div>`}
-function addPrice(c){const v=+$('#cp').value;if(!v)return;setPrice(c,$('#cs').value,v);save();cmpShow(c)}
+  // ── Ventes (hors annulées) ──
+  const today = new Date(); today.setHours(0,0,0,0);
+  let caGlobal = 0, ventesJour = 0, profitJour = 0;
+  const topMap = {};
 
-/* ---------- Données ---------- */
-R.data=()=>`<h2>Données & sauvegarde</h2><div class="c"><p>Les données sont enregistrées dans ce navigateur. Exportez régulièrement une sauvegarde.</p>
- <div class="bar"><button class="p" onclick="exportJ()">⬇ Exporter la sauvegarde (JSON)</button><label class="tag" style="cursor:pointer;padding:8px 12px">⬆ Importer une sauvegarde<input type="file" accept=".json" hidden onchange="importJ(this.files[0])"></label>
- <button class="d" onclick="resetAll()">Réinitialiser (données Excel d'origine)</button></div></div>`;
-function exportJ(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='matmata-sauvegarde-'+today()+'.json';a.click()}
-function importJ(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const j=JSON.parse(r.result);if(!j.products||!j.sales)throw 0;S=j;save();alert('Sauvegarde importée');go()}catch{alert('Fichier invalide')}};r.readAsText(file)}
-function resetAll(){if(confirm('Effacer toutes les modifications et recharger les données Excel ?')){localStorage.removeItem(KEY);location.reload()}}
-init();
-</script>
-</body>
-</html>
+  for (let i = 1; i < salesDataForStock.length; i++) {
+    const r = salesDataForStock[i];
+    if (!r[2]) continue;
+    // ★ Ignorer les ventes annulées dans les KPIs
+    if (String(r[10]).trim().toUpperCase() === "ANNULÉ") continue;
+    const code    = String(r[2]);
+    const desig   = String(r[3]) || code;
+    const prixU   = Number(r[4]) || 0;
+    const qte     = Number(r[5]) || 0;
+    const total   = prixU * qte;
+    const profit  = (prixU - (prixAchatMap[code]||0)) * qte;
+    caGlobal += total;
+    if (r[1]) {
+      const d = new Date(r[1]); d.setHours(0,0,0,0);
+      if (d.getTime() === today.getTime()) {
+        ventesJour += total;
+        profitJour += profit;
+      }
+    }
+    if (!topMap[code]) topMap[code] = { designation:desig, qty:0, ca:0, profit:0 };
+    topMap[code].qty    += qte;
+    topMap[code].ca     += total;
+    topMap[code].profit += profit;
+  }
+
+  const top5 = Object.entries(topMap)
+    .sort((a,b) => b[1].ca - a[1].ca).slice(0,5)
+    .map(([code,v]) => [code, v.designation, v.qty, v.ca]);
+
+  // ── Classement par Quantité Vendue (Top 10) ──
+  const rankQty = Object.entries(topMap)
+    .sort((a,b) => b[1].qty - a[1].qty).slice(0,10)
+    .map(([code,v]) => [code, v.designation, v.qty, v.ca]);
+
+  // ── Classement par Profit Réalisé (Top 10) ──
+  const rankProfit = Object.entries(topMap)
+    .sort((a,b) => b[1].profit - a[1].profit).slice(0,10)
+    .map(([code,v]) => [code, v.designation, v.qty, v.profit]);
+
+  // ── Écriture KPI ──
+  dbSheet.getRange("A6").setValue(valeurStock).setNumberFormat('#,##0.000 " DT"');
+  dbSheet.getRange("B6").setValue(caGlobal).setNumberFormat('#,##0.000 " DT"');
+  dbSheet.getRange("C6").setValue(ventesJour).setNumberFormat('#,##0.000 " DT"');
+  dbSheet.getRange("D6").setValue(profitJour).setNumberFormat('#,##0.000 " DT"');
+  dbSheet.getRange("E6").setValue(nbProduits).setNumberFormat("#,##0");
+  dbSheet.getRange("F6").setValue(nbAlertes).setNumberFormat("#,##0");
+  dbSheet.getRange("F6").setBackground(nbAlertes>0?"#FFCDD2":"#E8F5E9").setFontColor(nbAlertes>0?"#B71C1C":"#2E7D32");
+  dbSheet.getRange("D6").setFontColor(profitJour>=0?"#1B5E20":"#B71C1C");
+
+  // ── Enregistrement Suivi Journalier ──
+  // Crée la sheet si elle n'existe pas, puis upsert la ligne du jour
+  let dailySheet = ss.getSheetByName(SHEET_DAILY);
+  if (!dailySheet) { setupDailySheet(ss); dailySheet = ss.getSheetByName(SHEET_DAILY); }
+
+  // Compter le nb de transactions du jour (ventes actives uniquement)
+  let nbVentesJour = 0;
+  for (let i = 1; i < salesDataForStock.length; i++) {
+    const r = salesDataForStock[i];
+    if (!r[2] || String(r[10]).trim().toUpperCase() === "ANNULÉ") continue;
+    if (r[1]) {
+      const d = new Date(r[1]); d.setHours(0,0,0,0);
+      if (d.getTime() === today.getTime()) nbVentesJour++;
+    }
+  }
+
+  // Chercher si une ligne existe déjà pour aujourd'hui
+  const todayStr = Utilities.formatDate(today, Session.getScriptTimeZone(), "dd/MM/yyyy");
+  const lastDailyRow = dailySheet.getLastRow();
+  let foundRow = -1;
+  if (lastDailyRow >= 4) {
+    const dateCol = dailySheet.getRange(4, 1, lastDailyRow - 3, 1).getValues();
+    for (let i = 0; i < dateCol.length; i++) {
+      if (dateCol[i][0]) {
+        const cellStr = Utilities.formatDate(new Date(dateCol[i][0]), Session.getScriptTimeZone(), "dd/MM/yyyy");
+        if (cellStr === todayStr) { foundRow = i + 4; break; }
+      }
+    }
+  }
+
+  const targetRow = foundRow > 0 ? foundRow : (lastDailyRow < 4 ? 4 : lastDailyRow + 1);
+  dailySheet.getRange(targetRow, 1).setValue(today).setNumberFormat("DD/MM/YYYY");
+  dailySheet.getRange(targetRow, 2).setValue(ventesJour).setNumberFormat('#,##0.000 " DT"');
+  dailySheet.getRange(targetRow, 3).setValue(profitJour).setNumberFormat('#,##0.000 " DT"');
+  dailySheet.getRange(targetRow, 4).setValue(nbVentesJour).setNumberFormat("#,##0");
+  // Style de la ligne
+  dailySheet.getRange(targetRow, 3).setFontColor(profitJour >= 0 ? "#1B5E20" : "#B71C1C").setFontWeight("bold");
+  dailySheet.getRange(targetRow, 1, 1, 4)
+    .setBorder(true,true,true,true,true,true,"#CFD8DC",SpreadsheetApp.BorderStyle.SOLID);
+  // Mettre en surbrillance la ligne du jour
+  dailySheet.getRange(targetRow, 1, 1, 4).setBackground("#FFF8E1").setFontWeight("bold");
+  // Remettre les autres lignes en style normal (enlever le surlignage du jour précédent)
+  if (lastDailyRow >= 4) {
+    for (let i = 4; i <= dailySheet.getLastRow(); i++) {
+      if (i !== targetRow) {
+        const bg = (i % 2 === 0) ? COLOR_ALT_ROW : "#FFFFFF";
+        dailySheet.getRange(i, 1, 1, 4).setBackground(bg).setFontWeight("normal");
+        const p = dailySheet.getRange(i, 3).getValue();
+        dailySheet.getRange(i, 3).setFontColor(p >= 0 ? "#1B5E20" : "#B71C1C").setFontWeight("normal");
+      }
+    }
+  }
+
+  // ── Top 5 (lignes 10-14) ──
+  dbSheet.getRange("A10:D14").clearContent().setBackground(null).setFontColor(null).setFontWeight("normal").setFontStyle("normal");
+  try { dbSheet.getRange("A10:D10").breakApart(); } catch(e){}
+  if (top5.length === 0) {
+    dbSheet.getRange("A10:D10").merge()
+      .setValue("Aucune vente enregistrée.").setFontColor("#90A4AE").setFontStyle("italic").setHorizontalAlignment("center");
+  } else {
+    const medals = ["🥇","🥈","🥉"];
+    top5.forEach((row, i) => {
+      const r = 10 + i;
+      const prefix = medals[i] ? medals[i]+" " : "";
+      dbSheet.getRange(r,1).setValue(prefix + row[0]);
+      dbSheet.getRange(r,2).setValue(row[1]);
+      dbSheet.getRange(r,3).setValue(row[2]).setNumberFormat("#,##0");
+      dbSheet.getRange(r,4).setValue(row[3]).setNumberFormat('#,##0.000 " DT"');
+      dbSheet.getRange(r,1,1,4).setBackground(i%2===0?"#FFFFFF":"#E8EAF6");
+    });
+  }
+
+  // ── Classement par Quantité Vendue (lignes 18-27) ──
+  dbSheet.getRange("A18:F27").clearContent().setBackground(null).setFontColor(null)
+    .setFontWeight("normal").setFontStyle("normal");
+  try { dbSheet.getRange("A18:F18").breakApart(); } catch(e){}
+
+  if (rankQty.length === 0) {
+    dbSheet.getRange("A18:F18").merge()
+      .setValue("Aucune vente enregistrée.").setFontColor("#90A4AE")
+      .setFontStyle("italic").setHorizontalAlignment("center");
+  } else {
+    const qtyMedals = ["🥇","🥈","🥉"];
+    const qtyBgs    = ["#F1F8E9","#DCEDC8"];
+    rankQty.forEach((row, i) => {
+      const r = 18 + i;
+      const prefix = qtyMedals[i] ? qtyMedals[i] : (i+1)+"";
+      dbSheet.getRange(r,1).setValue(prefix).setHorizontalAlignment("center").setFontWeight("bold");
+      dbSheet.getRange(r,2).setValue(row[0]).setHorizontalAlignment("center");
+      dbSheet.getRange(r,3).setValue(row[1]);
+      dbSheet.getRange(r,4).setValue(row[2]).setNumberFormat("#,##0").setHorizontalAlignment("center").setFontWeight("bold").setFontColor("#1B5E20");
+      dbSheet.getRange(r,5).setValue(row[3]).setNumberFormat('#,##0.000 " DT"').setHorizontalAlignment("right");
+      dbSheet.getRange(r,6).setValue("");
+      const bg = qtyBgs[i%2];
+      dbSheet.getRange(r,1,1,6).setBackground(bg).setFontSize(10);
+      dbSheet.getRange(r,4).setFontWeight("bold").setFontColor("#1B5E20");
+      dbSheet.setRowHeight(r,24);
+    });
+  }
+
+  // ── Classement par Profit Réalisé (lignes 31-40) ──
+  dbSheet.getRange("A31:F40").clearContent().setBackground(null).setFontColor(null)
+    .setFontWeight("normal").setFontStyle("normal");
+  try { dbSheet.getRange("A31:F31").breakApart(); } catch(e){}
+
+  if (rankProfit.length === 0) {
+    dbSheet.getRange("A31:F31").merge()
+      .setValue("Aucune vente enregistrée.").setFontColor("#90A4AE")
+      .setFontStyle("italic").setHorizontalAlignment("center");
+  } else {
+    const profMedals = ["🥇","🥈","🥉"];
+    const profBgs    = ["#E8EAF6","#C5CAE9"];
+    rankProfit.forEach((row, i) => {
+      const r = 31 + i;
+      const prefix = profMedals[i] ? profMedals[i] : (i+1)+"";
+      const profitVal = row[3];
+      const profitColor = profitVal >= 0 ? "#1B5E20" : "#B71C1C";
+      dbSheet.getRange(r,1).setValue(prefix).setHorizontalAlignment("center").setFontWeight("bold");
+      dbSheet.getRange(r,2).setValue(row[0]).setHorizontalAlignment("center");
+      dbSheet.getRange(r,3).setValue(row[1]);
+      dbSheet.getRange(r,4).setValue(row[2]).setNumberFormat("#,##0").setHorizontalAlignment("center");
+      dbSheet.getRange(r,5).setValue(profitVal).setNumberFormat('#,##0.000 " DT"')
+        .setHorizontalAlignment("right").setFontWeight("bold").setFontColor(profitColor);
+      dbSheet.getRange(r,6).setValue("");
+      dbSheet.getRange(r,1,1,6).setBackground(profBgs[i%2]).setFontSize(10);
+      dbSheet.getRange(r,5).setFontWeight("bold").setFontColor(profitColor);
+      dbSheet.setRowHeight(r,24);
+    });
+  }
+
+  // ── Alertes — désormais tout en bas (lignes 44-52), sans case à cocher ──
+  dbSheet.getRange("A44:G52").clearContent().setBackground(null).setFontColor(null).setFontWeight("normal").setFontStyle("normal");
+  try { dbSheet.getRange("A44:F44").breakApart(); } catch(e){}
+  dbSheet.getRange("G44:G52").clearDataValidations();
+  if (alertRows.length === 0) {
+    dbSheet.getRange("A44:F44").merge()
+      .setValue("✅  Aucun produit en rupture ou en alerte actuellement.")
+      .setFontColor("#2E7D32").setFontStyle("italic").setHorizontalAlignment("center");
+  } else {
+    alertRows.forEach((row, i) => {
+      const r = 44 + i;
+      dbSheet.getRange(r, 1, 1, 6).setValues([row]);
+      dbSheet.getRange(r, 4).setNumberFormat("#,##0");
+      dbSheet.getRange(r, 5).setNumberFormat("#,##0");
+      dbSheet.getRange(r, 1, 1, 6).setBackground("#FFEBEE").setFontColor("#B71C1C");
+      dbSheet.getRange(r, 6).setFontWeight("bold");
+    });
+  }
+
+  // ── Horodatage ──
+  dbSheet.getRange("A2:G2").merge()
+    .setValue("⏱️  Mis à jour le : " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy à HH:mm:ss"))
+    .setFontColor("#757575").setFontStyle("italic").setFontSize(10).setHorizontalAlignment("center");
+}
+
+
+// ============================================================
+//  4. INITIALISATION
+// ============================================================
+function setupApplication() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rep = ui.alert("⚙️  Initialisation","Réinitialiser les 4 onglets ?\nLes données seront effacées.",ui.ButtonSet.YES_NO);
+  if (rep !== ui.Button.YES) return;
+  setupProductsSheet(ss);
+  setupSalesSheet(ss);
+  setupSuppliersSheet(ss);
+  setupClientsSheet(ss);
+  setupOrdersSheet(ss);
+  setupDashboardSheet(ss);
+  setupReportsSheet(ss);
+  setupDailySheet(ss);
+  updateDashboardValues();
+  const db = ss.getSheetByName(SHEET_DASHBOARD);
+  ss.setActiveSheet(db); ss.moveActiveSheet(1);
+  ui.alert("✅  Initialisé !\n\nÉTAPE SUIVANTE :\n🛠️ → 🔧 Installer les déclencheurs");
+}
+
+
+// ============================================================
+//  5. PAGE 2 : PRODUITS
+// ============================================================
+function setupProductsSheet(ss) {
+  let s = ss.getSheetByName(SHEET_PRODUCTS);
+  if (!s) s = ss.insertSheet(SHEET_PRODUCTS); else s.clear();
+  const h = ["Code Produit / SKU","Désignation","Catégorie","Prix d'Achat (DT)","Prix de Vente (DT)","Stock Initial","Qté Vendue","Stock Actuel","Seuil d'Alerte","Statut"];
+  s.getRange(1,1,1,h.length).setValues([h]);
+  formatHeaderRow(s,1,h.length);
+  s.getRange("G2").setFormula("=ARRAYFORMULA(IF(A2:A=\"\",\"\",IFERROR(SUMIF('"+SHEET_SALES+"'!C:C,A2:A,'"+SHEET_SALES+"'!F:F),0)))");
+  s.getRange("H2").setFormula("=ARRAYFORMULA(IF(A2:A=\"\",\"\",F2:F-G2:G))");
+  s.getRange("J2").setFormula("=ARRAYFORMULA(IF(A2:A=\"\",\"\",IF(H2:H<=I2:I,\"⚠️ ALERTE\",\"✅ OK\")))");
+  s.getRange("D2:E1000").setNumberFormat('#,##0.000 " DT"');
+  s.getRange("F2:I1000").setNumberFormat("#,##0");
+  const rules=[];
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextContains("ALERTE").setBackground(COLOR_ALERT_BG).setFontColor("#C62828").setBold(true).setRanges([s.getRange("J2:J1000")]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextContains("OK").setBackground(COLOR_OK_BG).setFontColor("#2E7D32").setRanges([s.getRange("J2:J1000")]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND($H2<>"",$H2<=$I2)').setBackground("#FFF3E0").setRanges([s.getRange("A2:J1000")]).build());
+  s.setConditionalFormatRules(rules);
+  [150,240,140,130,130,110,110,110,110,120].forEach((w,i)=>s.setColumnWidth(i+1,w));
+  s.setFrozenRows(1);
+  s.getRange("C2:C1000").setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(["Pièces moteur","Pièces freinage","Électricité","Transmission","Carrosserie","Accessoires","Lubrifiants","Pneus","Autres"],true).setAllowInvalid(false).build());
+  // ★ Aucun produit de démonstration : la feuille démarre vide, prête à être remplie via 🛠️ → ➕ Ajouter un Produit
+}
+
+
+// ============================================================
+//  6. PAGE 3 : VENTES
+//  ★ Ajout de la colonne K "Statut Vente" (vide = active, ANNULÉ = annulée)
+// ============================================================
+function setupSalesSheet(ss) {
+  let s = ss.getSheetByName(SHEET_SALES);
+  if (!s) s = ss.insertSheet(SHEET_SALES); else s.clear();
+  // ★ 12 colonnes désormais (ajout col K : Statut Vente, col L : Client)
+  const h = ["ID Vente","Date","Code Produit","Désignation","Prix Net (DT)","Quantité","Total (DT)","Mode de Paiement","💹 Profit (DT)","🏷️ Remise (DT)","📋 Statut","👤 Client"];
+  s.getRange(1,1,1,h.length).setValues([h]);
+  formatHeaderRow(s,1,h.length);
+  s.getRange("B2:B1000").setNumberFormat("DD/MM/YYYY");
+  s.getRange("E2:E1000").setNumberFormat('#,##0.000 " DT"');
+  s.getRange("G2:G1000").setNumberFormat('#,##0.000 " DT"');
+  s.getRange("I2:I1000").setNumberFormat('#,##0.000 " DT"');
+  s.getRange("J2:J1000").setNumberFormat('#,##0.000 " DT"');
+  s.getRange("F2:F1000").setNumberFormat("#,##0");
+
+  const rules = [];
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberGreaterThan(0).setFontColor("#1B5E20").setBold(true)
+    .setRanges([s.getRange("I2:I1000")]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberLessThan(0).setFontColor("#B71C1C").setBold(true)
+    .setRanges([s.getRange("I2:I1000")]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberEqualTo(0).setFontColor("#757575")
+    .setRanges([s.getRange("I2:I1000")]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberGreaterThan(0).setBackground("#FFF8E1").setFontColor("#E65100").setBold(true)
+    .setRanges([s.getRange("J2:J1000")]).build());
+  // ★ Formatage conditionnel pour les lignes ANNULÉES
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo("ANNULÉ")
+    .setBackground("#FAFAFA").setFontColor("#BDBDBD").setStrikethrough(true)
+    .setRanges([s.getRange("A2:L1000")]).build());
+  s.setConditionalFormatRules(rules);
+
+  [100,110,130,250,140,90,130,150,130,120,100,160].forEach((w,i)=>s.setColumnWidth(i+1,w));
+  s.setFrozenRows(1);
+  // ★ Aucune vente de démonstration : la feuille démarre vide
+  recalculateSalesRows(ss);
+}
+
+function recalculateSalesRows(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  const salesSheet = ss.getSheetByName(SHEET_SALES);
+  const prodSheet  = ss.getSheetByName(SHEET_PRODUCTS);
+  if (!salesSheet || !prodSheet) return;
+
+  const prodData = prodSheet.getDataRange().getValues();
+  const prodMap = {};
+  for (let i = 1; i < prodData.length; i++) {
+    const r = prodData[i];
+    if (!r[0]) continue;
+    prodMap[String(r[0])] = {
+      designation: String(r[1]),
+      prixAchat:   Number(r[3]) || 0,
+      prixVente:   Number(r[4]) || 0
+    };
+  }
+
+  const lastRow = salesSheet.getLastRow();
+  if (lastRow < 2) return;
+  const salesData = salesSheet.getRange(2, 1, lastRow - 1, 11).getValues();
+
+  const dCol = [], eCol = [], gCol = [], iCol = [];
+
+  salesData.forEach((row) => {
+    const code = row[2];
+    if (!code) {
+      dCol.push([""]); eCol.push([""]); gCol.push([""]); iCol.push([""]);
+      return;
+    }
+    const prod    = prodMap[String(code)] || { designation: "Produit inconnu", prixAchat: 0, prixVente: 0 };
+    const qte     = Number(row[5]) || 0;
+    const remise  = Number(row[9]) || 0;
+    const prixNet = Math.max(prod.prixVente - remise, 0);
+    const total   = prixNet * qte;
+    const profit  = (prixNet - prod.prixAchat) * qte;
+    dCol.push([prod.designation]);
+    eCol.push([prixNet]);
+    gCol.push([total]);
+    iCol.push([profit]);
+  });
+
+  salesSheet.getRange(2, 4, dCol.length, 1).setValues(dCol);
+  salesSheet.getRange(2, 5, eCol.length, 1).setValues(eCol);
+  salesSheet.getRange(2, 7, gCol.length, 1).setValues(gCol);
+  salesSheet.getRange(2, 9, iCol.length, 1).setValues(iCol);
+}
+
+
+// ============================================================
+//  7. PAGE 1 : TABLEAU DE BORD (structure)
+// ============================================================
+// ★ Layout réorganisé : KPI → Top5 → Classement Qté → Classement Profit → Alertes (en dernier)
+function setupDashboardSheet(ss) {
+  let s = ss.getSheetByName(SHEET_DASHBOARD);
+  if (!s) s = ss.insertSheet(SHEET_DASHBOARD); else { s.clear(); s.clearConditionalFormatRules(); }
+  s.getRange("A1:G1").merge().setValue("🏬  VOTRE BOUTIQUE — Tableau de Bord")
+    .setBackground(COLOR_ACCENT).setFontColor("#FFF").setFontSize(16).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+  s.setRowHeight(1,50);
+  s.getRange("A2:G2").merge().setValue("En attente du premier calcul...")
+    .setFontColor("#90A4AE").setFontStyle("italic").setFontSize(10).setHorizontalAlignment("center");
+  s.getRange("A4:G4").merge().setValue("📊  INDICATEURS CLÉS DE PERFORMANCE")
+    .setBackground(COLOR_HEADER_BG).setFontColor("#FFF").setFontWeight("bold").setFontSize(12).setHorizontalAlignment("center");
+  ["💰 Valeur Totale\ndu Stock","📈 Chiffre d'Affaires\nGlobal","🛒 Ventes\ndu Jour","💹 Profit\ndu Jour","📦 Nb\nProduits","⚠️ Produits\nen Alerte"].forEach((t,i)=>{
+    s.getRange(5,i+1).setValue(t).setBackground(COLOR_HEADER_BG).setFontColor("#FFF").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center").setWrap(true);
+    s.setRowHeight(5,50);
+    s.getRange(6,i+1).setValue("—").setBackground(COLOR_KPI_BG).setFontSize(14).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+    s.setRowHeight(6,60);
+  });
+
+  // ── Séparateur + TOP 5 (lignes 7-14) ──
+  s.getRange("A7:G7").merge().setBackground("#E0E0E0"); s.setRowHeight(7,6);
+  s.getRange("A8:G8").merge().setValue("🏆  TOP 5 DES PRODUITS LES PLUS VENDUS")
+    .setBackground(COLOR_HEADER_BG).setFontColor("#FFF").setFontWeight("bold").setFontSize(12).setHorizontalAlignment("center"); s.setRowHeight(8,36);
+  ["Code Produit","Désignation","Qté Vendue","CA Total (DT)"].forEach((h,i)=>{
+    s.getRange(9,i+1).setValue(h).setBackground("#283593").setFontColor("#FFF").setFontWeight("bold").setHorizontalAlignment("center").setFontSize(10);
+  }); s.setRowHeight(9,32);
+  s.getRange("A10:D14").setBackground("#F3F4FF");
+
+  // ── Séparateur + Classement Quantité (lignes 15-27) ──
+  s.getRange("A15:G15").merge().setBackground("#E0E0E0"); s.setRowHeight(15,6);
+  s.getRange("A16:G16").merge()
+    .setValue("📦  CLASSEMENT PAR QUANTITÉ VENDUE (Top 10)")
+    .setBackground("#1B5E20").setFontColor("#FFF").setFontWeight("bold").setFontSize(12)
+    .setHorizontalAlignment("center"); s.setRowHeight(16,36);
+  ["#","Code Produit","Désignation","Qté Vendue","CA Total (DT)",""].forEach((h,i)=>{
+    s.getRange(17,i+1).setValue(h)
+      .setBackground("#2E7D32").setFontColor("#FFF").setFontWeight("bold")
+      .setHorizontalAlignment("center").setFontSize(10);
+  }); s.setRowHeight(17,30);
+  s.getRange("A18:F27").setBackground("#F1F8E9");
+
+  // ── Séparateur + Classement Profit (lignes 28-40) ──
+  s.getRange("A28:G28").merge().setBackground("#E0E0E0"); s.setRowHeight(28,6);
+  s.getRange("A29:G29").merge()
+    .setValue("💹  CLASSEMENT PAR PROFIT RÉALISÉ (Top 10)")
+    .setBackground("#1A237E").setFontColor("#FFF").setFontWeight("bold").setFontSize(12)
+    .setHorizontalAlignment("center"); s.setRowHeight(29,36);
+  ["#","Code Produit","Désignation","Qté Vendue","Profit (DT)",""].forEach((h,i)=>{
+    s.getRange(30,i+1).setValue(h)
+      .setBackground("#283593").setFontColor("#FFF").setFontWeight("bold")
+      .setHorizontalAlignment("center").setFontSize(10);
+  }); s.setRowHeight(30,30);
+  s.getRange("A31:F40").setBackground("#E8EAF6");
+
+  // ── Séparateur + ALERTES, désormais tout en bas (lignes 41-52) — sans case à cocher ──
+  s.getRange("A41:G41").merge().setBackground("#E0E0E0"); s.setRowHeight(41,6);
+  s.getRange("A42:G42").merge().setValue("🚨  PRODUITS EN RUPTURE OU SOUS LE SEUIL D'ALERTE")
+    .setBackground("#B71C1C").setFontColor("#FFF").setFontWeight("bold").setFontSize(12).setHorizontalAlignment("center"); s.setRowHeight(42,36);
+  ["Code Produit","Désignation","Catégorie","Stock Actuel","Seuil","Statut"].forEach((h,i)=>{
+    s.getRange(43,i+1).setValue(h).setBackground("#C62828").setFontColor("#FFF").setFontWeight("bold").setHorizontalAlignment("center").setFontSize(10);
+  }); s.setRowHeight(43,32);
+  s.getRange("A44:F52").setBackground("#FFF9F9");
+
+  [150,230,200,130,140,110,110].forEach((w,i)=>s.setColumnWidth(i+1,w));
+  s.getRange("A1:G52").setBorder(true,true,true,true,true,true,"#B0BEC5",SpreadsheetApp.BorderStyle.SOLID);
+}
+
+
+// ============================================================
+//  8. PAGE 4 : RAPPORTS
+// ============================================================
+function setupReportsSheet(ss) {
+  let s = ss.getSheetByName(SHEET_REPORTS);
+  if (!s) s = ss.insertSheet(SHEET_REPORTS); else s.clear();
+  s.getRange("A1:E1").merge().setValue("📊  RAPPORTS & ANALYSES — Votre Boutique")
+    .setBackground(COLOR_HEADER_BG).setFontColor("#FFF").setFontSize(14).setFontWeight("bold").setHorizontalAlignment("center"); s.setRowHeight(1,45);
+  s.getRange("A3:E3").merge().setValue("Utilisez le menu 🛠️ → Générer le Rapport Mensuel")
+    .setFontStyle("italic").setFontColor("#757575").setHorizontalAlignment("center");
+  s.setColumnWidth(1,40); s.setColumnWidth(2,400);
+}
+
+
+// ============================================================
+//  9B. PAGE 5 : SUIVI JOURNALIER
+// ============================================================
+function setupDailySheet(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(SHEET_DAILY);
+  if (!s) s = ss.insertSheet(SHEET_DAILY); else s.clear();
+
+  // Titre
+  s.getRange("A1:D1").merge()
+    .setValue("📅  VOTRE BOUTIQUE — Suivi Journalier des Ventes")
+    .setBackground(COLOR_HEADER_BG).setFontColor("#FFF")
+    .setFontSize(14).setFontWeight("bold").setHorizontalAlignment("center");
+  s.setRowHeight(1, 45);
+
+  s.getRange("A2:D2").merge()
+    .setValue("Mis à jour automatiquement à chaque actualisation du tableau de bord")
+    .setFontColor("#90A4AE").setFontStyle("italic").setFontSize(10)
+    .setHorizontalAlignment("center");
+
+  // En-têtes colonnes
+  const headers = ["📅 Date", "💰 Ventes du Jour (DT)", "💹 Profit du Jour (DT)", "📊 Nb Ventes"];
+  headers.forEach((h, i) => {
+    s.getRange(3, i + 1).setValue(h)
+      .setBackground(COLOR_ACCENT).setFontColor("#FFF")
+      .setFontWeight("bold").setFontSize(11)
+      .setHorizontalAlignment("center").setVerticalAlignment("middle");
+  });
+  s.setRowHeight(3, 36);
+
+  // Formats colonnes
+  s.getRange("A4:A1000").setNumberFormat("DD/MM/YYYY");
+  s.getRange("B4:C1000").setNumberFormat('#,##0.000 " DT"');
+  s.getRange("D4:D1000").setNumberFormat("#,##0");
+
+  // Formatage conditionnel profit (vert/rouge)
+  const rules = [];
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberGreaterThan(0).setFontColor("#1B5E20").setBold(true)
+    .setRanges([s.getRange("C4:C1000")]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberLessThan(0).setFontColor("#B71C1C").setBold(true)
+    .setRanges([s.getRange("C4:C1000")]).build());
+  // Ligne paire alternée
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=MOD(ROW(),2)=0')
+    .setBackground(COLOR_ALT_ROW)
+    .setRanges([s.getRange("A4:D1000")]).build());
+  s.setConditionalFormatRules(rules);
+
+  // Largeurs colonnes
+  [130, 180, 180, 110].forEach((w, i) => s.setColumnWidth(i + 1, w));
+  s.setFrozenRows(3);
+
+  // Bordure globale
+  s.getRange("A1:D2").setBorder(true,true,true,true,true,true,"#B0BEC5",SpreadsheetApp.BorderStyle.SOLID);
+  s.getRange("A3:D3").setBorder(true,true,true,true,true,true,"#FFFFFF",SpreadsheetApp.BorderStyle.SOLID);
+}
+
+function goToDailySheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(SHEET_DAILY);
+  if (!s) { setupDailySheet(ss); s = ss.getSheetByName(SHEET_DAILY); }
+  ss.setActiveSheet(s);
+}
+
+// ============================================================
+//  9C. PAGE 6 : FOURNISSEURS
+// ============================================================
+function setupSuppliersSheet(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(SHEET_SUPPLIERS);
+  if (!s) s = ss.insertSheet(SHEET_SUPPLIERS); else s.clear();
+  const h = ["Nom Fournisseur","Téléphone","Adresse","Code Produit","Prix Fournisseur (DT)","Date MAJ"];
+  s.getRange(1,1,1,h.length).setValues([h]);
+  formatHeaderRow(s,1,h.length);
+  s.getRange("E2:E2000").setNumberFormat('#,##0.000 " DT"');
+  s.getRange("F2:F2000").setNumberFormat("DD/MM/YYYY");
+  [180,120,220,140,150,110].forEach((w,i)=>s.setColumnWidth(i+1,w));
+  s.setFrozenRows(1);
+}
+
+function ensureSuppliersSheet(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(SHEET_SUPPLIERS);
+  if (!s) setupSuppliersSheet(ss);
+  return ss.getSheetByName(SHEET_SUPPLIERS);
+}
+
+// ============================================================
+//  9D. PAGE 7 : CLIENTS
+// ============================================================
+function setupClientsSheet(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(SHEET_CLIENTS);
+  if (!s) s = ss.insertSheet(SHEET_CLIENTS); else s.clear();
+  const h = ["Nom Client","Téléphone","Adresse","Date d'Inscription"];
+  s.getRange(1,1,1,h.length).setValues([h]);
+  formatHeaderRow(s,1,h.length);
+  s.getRange("D2:D2000").setNumberFormat("DD/MM/YYYY");
+  s.getRange(2,1).setValue("Client Passager");
+  [200,140,260,150].forEach((w,i)=>s.setColumnWidth(i+1,w));
+  s.setFrozenRows(1);
+}
+
+function ensureClientsSheet(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(SHEET_CLIENTS);
+  if (!s) setupClientsSheet(ss);
+  return ss.getSheetByName(SHEET_CLIENTS);
+}
+
+// ============================================================
+//  9E. PAGE 8 : COMMANDES FOURNISSEURS
+// ============================================================
+function setupOrdersSheet(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(SHEET_ORDERS);
+  if (!s) s = ss.insertSheet(SHEET_ORDERS); else s.clear();
+  const h = ["ID Commande","Date","Fournisseur","Code Produit","Désignation","Qté à Commander","Prix Fournisseur (DT)","Total (DT)","Statut"];
+  s.getRange(1,1,1,h.length).setValues([h]);
+  formatHeaderRow(s,1,h.length);
+  s.getRange("B2:B2000").setNumberFormat("DD/MM/YYYY");
+  s.getRange("G2:H2000").setNumberFormat('#,##0.000 " DT"');
+  s.getRange("F2:F2000").setNumberFormat("#,##0");
+  [130,110,180,140,240,120,150,130,120].forEach((w,i)=>s.setColumnWidth(i+1,w));
+  s.setFrozenRows(1);
+}
+
+function ensureOrdersSheet(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  let s = ss.getSheetByName(SHEET_ORDERS);
+  if (!s) setupOrdersSheet(ss);
+  return ss.getSheetByName(SHEET_ORDERS);
+}
+
+// ============================================================
+//  9. ACTUALISATION MANUELLE
+// ============================================================
+function refreshDashboard() {
+  updateDashboardValues();
+  SpreadsheetApp.getUi().alert("✅  Tableau de Bord actualisé !");
+}
+
+function recalculateSalesRowsMenu() {
+  recalculateSalesRows(SpreadsheetApp.getActiveSpreadsheet());
+  updateDashboardValues();
+  SpreadsheetApp.getUi().alert("✅  Colonnes Désignation / Prix / Total de la Page Ventes recalculées !");
+}
+
+
+// ============================================================
+//  10. DIALOGUE PRODUIT
+//  ★ MODIFICATION : affiche stockActuel (calculé en JS) au lieu de stockInitial
+// ============================================================
+function showAddProductDialog() {
+  const html = HtmlService.createHtmlOutput(buildProductDialogHtml())
+    .setWidth(480).setHeight(600).setTitle("Produits — Votre Boutique");
+  SpreadsheetApp.getUi().showModalDialog(html, "➕  Ajouter / Modifier un Produit");
+}
+
+function buildProductDialogHtml() {
+  return '<!DOCTYPE html>' +
+'<html><head><base target="_top"><style>' +
+'*{box-sizing:border-box;margin:0;padding:0;font-family:\'Segoe UI\',Arial,sans-serif}' +
+'body{background:#F5F5F5;padding:16px}' +
+'h2{background:#1A237E;color:white;padding:14px 16px;border-radius:8px 8px 0 0;font-size:15px;margin-bottom:0}' +
+'.card{background:white;border-radius:0 0 8px 8px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.1)}' +
+'.fg{margin-bottom:13px;position:relative}' +
+'label{display:block;font-size:12px;font-weight:600;color:#37474F;margin-bottom:4px}' +
+'input,select{width:100%;padding:8px 10px;border:1.5px solid #CFD8DC;border-radius:5px;font-size:13px;color:#263238}' +
+'input:focus,select:focus{outline:none;border-color:#1A237E}' +
+'.r2{display:grid;grid-template-columns:1fr 1fr;gap:10px}' +
+'.hint{font-size:11px;color:#90A4AE;margin-top:3px}' +
+'.btns{display:flex;gap:10px;margin-top:16px}' +
+'.bs{flex:2;padding:10px;background:#FF6F00;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}' +
+'.bs:disabled{background:#BDBDBD;cursor:default}' +
+'.bs:hover:not(:disabled){background:#E65100}' +
+'.bc{flex:1;padding:10px;background:#ECEFF1;color:#546E7A;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}' +
+'.msg{margin-top:12px;font-size:12px;padding:8px 12px;border-radius:5px;display:none}' +
+'.s{background:#E8F5E9;color:#2E7D32;display:block}' +
+'.e{background:#FFEBEE;color:#C62828;display:block}' +
+'.tabs{display:flex;gap:8px;margin-bottom:14px}' +
+'.tab{flex:1;padding:8px;border:2px solid #B0BEC5;background:white;color:#546E7A;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}' +
+'.tab.on{border-color:#1A237E;background:#E8EAF6;color:#1A237E}' +
+'#szone{display:none;margin-bottom:14px;position:relative}' +
+'#aclist{position:absolute;top:100%;left:0;right:0;z-index:9999;background:white;' +
+'border:1.5px solid #1A237E;border-radius:0 0 6px 6px;max-height:200px;overflow-y:auto;' +
+'box-shadow:0 4px 12px rgba(0,0,0,.2)}' +
+'.aci{padding:9px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #F5F5F5;' +
+'display:flex;justify-content:space-between;align-items:center}' +
+'.aci:hover{background:#E8EAF6}' +
+'.acode{font-weight:700;color:#1A237E;margin-right:8px;min-width:80px;display:inline-block}' +
+'.aprix{font-size:11px;color:#78909C;white-space:nowrap}' +
+// ★ Style badge stock actuel
+'.stock-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;margin-top:4px}' +
+'.stock-ok{background:#E8F5E9;color:#2E7D32}' +
+'.stock-low{background:#FFF3E0;color:#E65100}' +
+'.stock-zero{background:#FFEBEE;color:#C62828}' +
+'</style></head><body>' +
+'<h2>➕  Ajouter / Modifier un Produit</h2>' +
+'<div class="card">' +
+'<div class="tabs">' +
+'<button class="tab on" id="ta" onclick="setMode(\'add\')">➕ Nouveau produit</button>' +
+'<button class="tab" id="te" onclick="setMode(\'edit\')">✏️ Modifier existant</button>' +
+'</div>' +
+'<div id="szone">' +
+'<label>Rechercher un article à modifier (Code ou Désignation)</label>' +
+'<input type="text" id="si" placeholder="Tapez pour rechercher (code ou désignation)..." autocomplete="off" oninput="doSearch()" onfocus="doSearch(true)">' +
+'<div id="aclist"></div>' +
+// ★ Zone affichage stock actuel après sélection
+'<div id="stockinfo" style="margin-top:6px;min-height:22px"></div>' +
+'<div id="sr" style="margin-top:4px;font-size:12px;color:#546E7A"></div>' +
+'</div>' +
+'<div class="fg"><label>Code Produit / SKU *</label><input type="text" id="code" placeholder="ex: MMS-006"><div class="hint">Unique. En mode Modifier, sélectionnez un article dans la liste ci-dessus.</div></div>' +
+'<div class="fg"><label>Désignation *</label><input type="text" id="des" placeholder="ex: Bougie NGK CR7HSA"></div>' +
+'<div class="fg"><label>Catégorie *</label><select id="cat"><option value="">-- Choisir --</option>' +
+'<option>Pièces moteur</option><option>Pièces freinage</option><option>Électricité</option>' +
+'<option>Transmission</option><option>Carrosserie</option><option>Accessoires</option>' +
+'<option>Lubrifiants</option><option>Pneus</option><option>Autres</option></select></div>' +
+'<div class="fg" id="fournZone"><label id="fournLbl">Fournisseur *</label>' +
+'<select id="fourn" onchange="onFournChange()"><option value="">-- Choisir un fournisseur --</option><option value="__new__">➕ Nouveau fournisseur...</option></select>' +
+'<input type="text" id="fournNew" placeholder="Nom du nouveau fournisseur" style="display:none;margin-top:6px" oninput="syncPa()">' +
+'<div class="hint" id="fournHint">Obligatoire pour un nouveau produit. Un article peut avoir plusieurs fournisseurs (Page 6).</div></div>' +
+'<div class="r2">' +
+'<div class="fg"><label id="pfLbl">Prix Fournisseur (DT) *</label><input type="number" id="pf" placeholder="0.000" step="0.001" min="0" oninput="syncPa()"></div>' +
+'<div class="fg"><label>Prix de Vente (DT) *</label><input type="number" id="pv" placeholder="0.000" step="0.001" min="0"></div>' +
+'</div>' +
+'<div class="fg"><label>Prix d\'Achat (DT) — prix fournisseur le plus élevé</label><input type="number" id="pa" placeholder="0.000" step="0.001" min="0" readonly style="background:#F5F5F5;color:#546E7A"></div>' +
+'<div class="r2">' +
+'<div class="fg"><label>Stock Initial *</label><input type="number" id="si2" placeholder="0" min="0"></div>' +
+'<div class="fg"><label>Seuil d\'Alerte *</label><input type="number" id="se" placeholder="0" min="0"></div>' +
+'</div>' +
+'<div class="btns">' +
+'<button class="bs" id="btnS" onclick="doSave()">💾  Enregistrer</button>' +
+'<button class="bc" onclick="google.script.host.close()">Annuler</button>' +
+'</div>' +
+'<div class="msg" id="msg"></div>' +
+'</div>' +
+'<script>' +
+'var mode="add";' +
+'var prodList=[];' +
+'var prodMap={};' +
+'function syncPa(){document.getElementById("pa").value=document.getElementById("pf").value;}' +
+'function onFournChange(){' +
+'  var sel=document.getElementById("fourn").value;' +
+'  document.getElementById("fournNew").style.display=(sel==="__new__")?"block":"none";' +
+'}' +
+'function getFournName(){' +
+'  var sel=document.getElementById("fourn").value;' +
+'  return sel==="__new__"?document.getElementById("fournNew").value.trim():sel;' +
+'}' +
+'function loadSuppliers(){' +
+'  google.script.run.withSuccessHandler(function(list){' +
+'    var names={};(list||[]).forEach(function(s){if(s.nom)names[s.nom]=true;});' +
+'    var sel=document.getElementById("fourn");' +
+'    Object.keys(names).sort().forEach(function(n){' +
+'      var o=document.createElement("option");o.value=n;o.textContent=n;' +
+'      sel.insertBefore(o,sel.lastChild);' +
+'    });' +
+'  }).getAllSuppliers();' +
+'}' +
+
+'window.onload=function(){' +
+'  loadSuppliers();' +
+'  google.script.run' +
+'    .withSuccessHandler(function(list){' +
+'      prodList=list||[];' +
+'      prodMap={};' +
+'      for(var i=0;i<prodList.length;i++){prodMap[prodList[i].code]=prodList[i];}' +
+'    })' +
+'    .withFailureHandler(function(e){console.log("Erreur chargement produits : "+e.message);})' +
+'    .getAllProducts();' +
+'  document.addEventListener("click",function(ev){' +
+'    if(!ev.target.closest("#si")&&!ev.target.closest("#aclist"))closeAC();' +
+'  });' +
+'};' +
+
+'function setMode(m){' +
+'  mode=m;' +
+'  document.getElementById("ta").className="tab"+(m==="add"?" on":"");' +
+'  document.getElementById("te").className="tab"+(m==="edit"?" on":"");' +
+'  document.getElementById("szone").style.display=m==="edit"?"block":"none";' +
+'  document.getElementById("fournLbl").textContent=m==="add"?"Fournisseur *":"Fournisseur (optionnel — ajoute un nouveau prix)";' +
+'  document.getElementById("pfLbl").textContent=m==="add"?"Prix Fournisseur (DT) *":"Prix Fournisseur (DT)";' +
+'  document.getElementById("fournHint").textContent=m==="add"?"Obligatoire pour un nouveau produit. Un article peut avoir plusieurs fournisseurs (Page 6).":"Laissez vide pour ne pas changer les fournisseurs existants.";' +
+'  if(m==="add")clearF();' +
+'}' +
+
+'function norm(s){return (s||"").toString().toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"");}' +
+'function doSearch(showAll){' +
+'  var q=norm(document.getElementById("si").value.trim());' +
+'  var ac=document.getElementById("aclist");' +
+'  if(!q&&!showAll){ac.innerHTML="";return;}' +
+'  var matches=[];' +
+'  for(var i=0;i<prodList.length&&matches.length<10;i++){' +
+'    var p=prodList[i];' +
+'    if(!q||norm(p.code).indexOf(q)>=0||norm(p.designation).indexOf(q)>=0)matches.push(p);' +
+'  }' +
+'  if(!matches.length){ac.innerHTML=\'<div class="aci" style="color:#90A4AE">Aucun résultat</div>\';return;}' +
+'  var html="";' +
+'  for(var j=0;j<matches.length;j++){' +
+'    var p=matches[j];' +
+'    html+=\'<div class="aci" data-code="\'+p.code+\'" onclick="pickProduct(this)">\'+' +
+'          \'<span><span class="acode">\'+p.code+\'</span>\'+p.designation+\'</span>\'+' +
+'          \'<span class="aprix">\'+p.prixVente.toFixed(3)+\' DT</span></div>\';' +
+'  }' +
+'  ac.innerHTML=html;' +
+'}' +
+
+// ★ MODIFICATION PRINCIPALE : affiche stockActuel (calculé JS côté serveur)
+'function pickProduct(el){' +
+'  var code=el.getAttribute("data-code");' +
+'  var p=prodMap[code];' +
+'  closeAC();' +
+'  if(!p){document.getElementById("sr").innerHTML="⚠️ Produit introuvable.";return;}' +
+'  document.getElementById("si").value=p.code+" — "+p.designation;' +
+// ★ Affichage visuel du stock ACTUEL avec badge coloré
+'  var stockCls=p.stock<=0?"stock-zero":(p.stock<=p.seuil?"stock-low":"stock-ok");' +
+'  var stockLbl=p.stock<=0?"⛔ Rupture (0)":(p.stock<=p.seuil?"⚠️ Stock bas : "+p.stock+" unité(s)":"✅ Stock actuel : "+p.stock+" unité(s)");' +
+'  document.getElementById("stockinfo").innerHTML=\'<span class="stock-badge \'+stockCls+\'">\'+stockLbl+\'</span>\';' +
+'  document.getElementById("sr").innerHTML="Stock initial : "+p.stockInitial+" | Vendu : "+(p.stockInitial-p.stock)+" | <strong>Actuel : "+p.stock+"</strong>";' +
+'  document.getElementById("code").value=p.code||"";' +
+'  document.getElementById("des").value=p.designation||"";' +
+'  document.getElementById("cat").value=p.categorie||"";' +
+'  document.getElementById("pa").value=p.prixAchat||"";' +
+'  document.getElementById("pv").value=p.prixVente||"";' +
+'  document.getElementById("si2").value=p.stockInitial||"";' +
+'  document.getElementById("se").value=p.seuil||"";' +
+'  document.getElementById("fourn").value="";' +
+'  document.getElementById("pf").value="";' +
+'}' +
+
+'function closeAC(){document.getElementById("aclist").innerHTML="";}' +
+
+'function clearF(){' +
+'  ["code","des","pa","pv","si2","se","fourn","pf","fournNew"].forEach(function(id){document.getElementById(id).value="";});' +
+'  document.getElementById("fournNew").style.display="none";' +
+'  document.getElementById("cat").value="";' +
+'  var siEl=document.getElementById("si"); if(siEl)siEl.value="";' +
+'  var srEl=document.getElementById("sr"); if(srEl)srEl.innerHTML="";' +
+'  var siEl2=document.getElementById("stockinfo"); if(siEl2)siEl2.innerHTML="";' +
+'  closeAC();' +
+'  document.getElementById("msg").className="msg";' +
+'}' +
+
+'function doSave(){' +
+'  var code=document.getElementById("code").value.trim();' +
+'  var des=document.getElementById("des").value.trim();' +
+'  var cat=document.getElementById("cat").value;' +
+'  var fourn=getFournName();' +
+'  var pf=parseFloat(document.getElementById("pf").value)||0;' +
+'  var pa=parseFloat(document.getElementById("pa").value)||0;' +
+'  var pv=parseFloat(document.getElementById("pv").value)||0;' +
+'  var si2=parseInt(document.getElementById("si2").value)||0;' +
+'  var se=parseInt(document.getElementById("se").value)||0;' +
+'  if(!code||!des||!cat){showMsg("Remplissez tous les champs obligatoires (*)","e");return;}' +
+'  if(mode==="add"&&!fourn){showMsg("Le fournisseur est obligatoire pour un nouveau produit.","e");return;}' +
+'  if(mode==="add"&&pf<=0){showMsg("Indiquez le prix fournisseur (prix d\'achat).","e");return;}' +
+'  var paFinal=pf>0?pf:pa;' +
+'  if(pv<paFinal){showMsg("⚠️ Prix de vente inférieur au prix d\'achat !","e");return;}' +
+'  var btn=document.getElementById("btnS");' +
+'  btn.disabled=true;btn.textContent="⏳ Enregistrement...";' +
+'  var payload={code:code,designation:des,categorie:cat,fournisseur:fourn,prixFournisseur:pf,prixAchat:paFinal,prixVente:pv,stockInitial:si2,seuil:se,mode:mode};' +
+'  google.script.run' +
+'    .withSuccessHandler(function(r){' +
+'      showMsg(r,"s");' +
+'      btn.disabled=false;btn.textContent="💾  Enregistrer";' +
+'      if(mode==="add")clearF();' +
+'      else{' +
+'        google.script.run.withSuccessHandler(function(list){' +
+'          prodList=list||[];prodMap={};' +
+'          for(var i=0;i<prodList.length;i++){prodMap[prodList[i].code]=prodList[i];}' +
+'        }).getAllProducts();' +
+'      }' +
+'    })' +
+'    .withFailureHandler(function(err){' +
+'      showMsg("Erreur : "+err.message,"e");' +
+'      btn.disabled=false;btn.textContent="💾  Enregistrer";' +
+'    })' +
+'    .saveProduct(payload);' +
+'}' +
+'function showMsg(t,cls){var el=document.getElementById("msg");el.textContent=t;el.className="msg "+cls;}' +
+'<\/script></body></html>';
+}
+
+
+// ============================================================
+//  11. DIALOGUE VENTE
+// ============================================================
+function showAddSaleDialog() {
+  const html = HtmlService.createHtmlOutput(buildSaleDialogHtml())
+    .setWidth(660).setHeight(700).setTitle("Ventes — Votre Boutique");
+  SpreadsheetApp.getUi().showModalDialog(html, "🛒  Enregistrer une Vente");
+}
+
+function buildSaleDialogHtml() {
+  return '<!DOCTYPE html>' +
+'<html><head><base target="_top"><style>' +
+'*{box-sizing:border-box;margin:0;padding:0;font-family:\'Segoe UI\',Arial,sans-serif}' +
+'body{background:#F5F5F5;padding:16px}' +
+'h2{background:#FF6F00;color:white;padding:14px 18px;border-radius:8px 8px 0 0;font-size:15px}' +
+'.card{background:white;border-radius:0 0 8px 8px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.12)}' +
+'.sec-title{font-size:13px;color:#1A237E;font-weight:700;margin-bottom:8px;border-bottom:2px solid #E8EAF6;padding-bottom:4px}' +
+'#empty{font-size:12px;color:#90A4AE;font-style:italic;padding:10px 0;text-align:center}' +
+'table{width:100%;border-collapse:collapse;font-size:11px}' +
+'thead tr{background:#1A237E;color:white}' +
+'th{padding:6px 6px;text-align:left;font-weight:600;font-size:11px}' +
+'tbody tr{border-bottom:1px solid #ECEFF1}' +
+'tbody tr:nth-child(even){background:#F8F9FF}' +
+'td{padding:5px 6px;vertical-align:middle}' +
+'.bdel{background:none;border:none;color:#EF5350;font-size:14px;cursor:pointer;padding:2px 5px;border-radius:4px}' +
+'.bdel:hover{background:#FFEBEE}' +
+'.ninp{width:62px;padding:3px 4px;text-align:right;border:1px solid #CFD8DC;border-radius:4px;font-size:11px}' +
+'.rinp{width:70px;padding:3px 4px;text-align:right;border:1.5px solid #FFB300;border-radius:4px;font-size:11px;background:#FFFDE7;color:#E65100;font-weight:600}' +
+'.rinp:focus{outline:none;border-color:#FF6F00}' +
+'#totals{background:#E8EAF6;border-radius:6px;padding:10px 14px;display:none;margin:10px 0}' +
+'#totals .row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}' +
+'#totals .remrow{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:#E65100}' +
+'#totals .grand{font-weight:700;font-size:15px;color:#1A237E}' +
+'.fg{margin-bottom:12px;position:relative}' +
+'label{display:block;font-size:12px;font-weight:600;color:#37474F;margin-bottom:4px}' +
+'input,select{width:100%;padding:8px 10px;border:1.5px solid #CFD8DC;border-radius:5px;font-size:13px;color:#263238}' +
+'input:focus,select:focus{outline:none;border-color:#FF6F00}' +
+'#aclist{position:absolute;top:100%;left:0;right:0;z-index:9999;background:white;' +
+'border:1.5px solid #FF6F00;border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.2)}' +
+'#clac{position:absolute;top:100%;left:0;right:0;z-index:9999;background:white;' +
+'border:1.5px solid #1A237E;border-radius:0 0 6px 6px;max-height:140px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.2)}' +
+'.clai{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #F5F5F5}' +
+'.clai:hover{background:#E8EAF6}' +
+'.aci{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #F5F5F5;' +
+'display:flex;justify-content:space-between;align-items:center}' +
+'.aci:hover{background:#FFF3E0}' +
+'.acode{font-weight:700;color:#FF6F00;margin-right:8px;min-width:75px;display:inline-block}' +
+'.ast{font-size:11px;white-space:nowrap}' +
+'.ast.low{color:#EF5350;font-weight:600}' +
+'.ast.ok{color:#388E3C}' +
+'.addrow{display:grid;grid-template-columns:1fr 80px 80px;gap:8px;align-items:end}' +
+'.badd{background:#1A237E;color:white;border:none;border-radius:6px;padding:9px 14px;' +
+'font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;width:100%}' +
+'.badd:hover{background:#283593}' +
+'.sep{border:none;border-top:2px solid #E8EAF6;margin:12px 0}' +
+'.r2{display:grid;grid-template-columns:1fr 1fr;gap:10px}' +
+'.btns{display:flex;gap:10px;margin-top:12px}' +
+'.bsave{flex:2;padding:10px;background:#FF6F00;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}' +
+'.bsave:disabled{background:#BDBDBD;cursor:default}' +
+'.bsave:hover:not(:disabled){background:#E65100}' +
+'.bcancel{flex:1;padding:10px;background:#ECEFF1;color:#546E7A;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}' +
+'.msg{margin-top:10px;font-size:12px;padding:8px 12px;border-radius:5px;display:none}' +
+'.s{background:#E8F5E9;color:#2E7D32;display:block}' +
+'.e{background:#FFEBEE;color:#C62828;display:block}' +
+'.badge{display:inline-block;background:#FF6F00;color:white;border-radius:12px;font-size:10px;padding:1px 8px;margin-left:8px}' +
+'#selinfo{font-size:11px;color:#546E7A;margin-top:5px;min-height:15px}' +
+'.rem-badge{display:inline-block;background:#FFF3E0;color:#E65100;border-radius:10px;font-size:10px;padding:1px 7px;margin-left:4px;font-weight:700}' +
+'</style></head>' +
+'<body>' +
+'<h2>🛒  Enregistrer une Vente <span id="badge" class="badge" style="display:none">0</span></h2>' +
+'<div class="card">' +
+
+'<div class="sec-title">🧾 Panier</div>' +
+'<div id="empty">Aucun article — recherchez un produit ci-dessous.</div>' +
+'<table id="ctable" style="display:none">' +
+'<thead><tr>' +
+'<th>Code</th>' +
+'<th>Désignation</th>' +
+'<th style="text-align:right">P.V (DT)</th>' +
+'<th style="text-align:center">Qté</th>' +
+'<th style="text-align:right;color:#FFD54F">🏷️ Remise/u</th>' +
+'<th style="text-align:right">Net (DT)</th>' +
+'<th style="text-align:right">Total</th>' +
+'<th></th>' +
+'</tr></thead>' +
+'<tbody id="cbody"></tbody>' +
+'</table>' +
+
+'<div id="totals">' +
+'<div class="row"><span>Unités totales :</span><span id="titems">0</span></div>' +
+'<div class="remrow" id="remrow" style="display:none"><span>🏷️ Remise totale accordée :</span><span id="tremise">0,000 DT</span></div>' +
+'<div class="row"><span>Montant brut :</span><span id="tbrut">0,000 DT</span></div>' +
+'<div class="row grand"><span>💰 Total net à payer :</span><span id="tamount">0,000 DT</span></div>' +
+'</div>' +
+
+'<div class="addrow" style="margin-top:10px">' +
+'<div class="fg" style="margin-bottom:0">' +
+'<label>Rechercher un produit (Code ou Désignation)</label>' +
+'<input type="text" id="sprod" placeholder="Tapez le code ou la désignation..." autocomplete="off" oninput="onSrch()" onfocus="onSrch(true)">' +
+'<div id="aclist"></div>' +
+'</div>' +
+'<div class="fg" style="margin-bottom:0"><label>Quantité</label><input type="number" id="qinp" value="1" min="1" step="1"></div>' +
+'<div class="fg" style="margin-bottom:0"><label>🏷️ Remise (DT)</label><input type="number" id="rinp" value="0" min="0" step="0.001" placeholder="0.000" style="border:1.5px solid #FFB300;background:#FFFDE7;color:#E65100;font-weight:600"></div>' +
+'</div>' +
+'<div id="selinfo"></div>' +
+'<div style="margin-top:8px"><button class="badd" onclick="addToCart()">+ Ajouter au panier</button></div>' +
+
+'<hr class="sep">' +
+
+'<div class="r2">' +
+'<div class="fg"><label>Date de vente *</label><input type="date" id="sdate"></div>' +
+'<div class="fg"><label>Mode de paiement *</label>' +
+'<select id="spay">' +
+'<option value="Espèces">💵 Espèces</option>' +
+'<option value="Chèque">📄 Chèque</option>' +
+'<option value="Virement bancaire">🏦 Virement bancaire</option>' +
+'<option value="Carte bancaire">💳 Carte bancaire</option>' +
+'</select></div>' +
+'</div>' +
+'<div class="fg" style="position:relative">' +
+'<label>👤 Client</label>' +
+'<input type="text" id="sclient" placeholder="Rechercher ou taper un nom... (vide = Client Passager)" autocomplete="off" oninput="onClientSrch()" onfocus="onClientSrch()">' +
+'<div id="clac"></div>' +
+'<div class="hint" style="font-size:11px;color:#90A4AE;margin-top:3px">Si le nom tapé ne correspond à aucun client existant, la vente sera enregistrée sous « Client Passager ».</div>' +
+'</div>' +
+
+'<div class="btns">' +
+'<button class="bsave" id="btnSave" onclick="doSave()" disabled>💾  Enregistrer la vente</button>' +
+'<button class="bcancel" onclick="google.script.host.close()">Annuler</button>' +
+'</div>' +
+'<div class="msg" id="msg"></div>' +
+'</div>' +
+
+'<script>' +
+'var prodMap={},prodList=[],cart=[],selProd=null;' +
+'var clientList=[];' +
+'function norm(s){return (s||"").toString().toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"");}' +
+
+'window.onload=function(){' +
+'  var t=new Date(),pad=function(n){return ("0"+n).slice(-2);};' +
+'  document.getElementById("sdate").value=t.getFullYear()+"-"+pad(t.getMonth()+1)+"-"+pad(t.getDate());' +
+'  document.addEventListener("click",function(ev){' +
+'    if(!ev.target.closest("#sprod")&&!ev.target.closest("#aclist"))closeAC();' +
+'    if(!ev.target.closest("#sclient")&&!ev.target.closest("#clac"))document.getElementById("clac").innerHTML="";' +
+'  });' +
+'  loadProducts();' +
+'  google.script.run.withSuccessHandler(function(list){clientList=list||[];}).getAllClients();' +
+'};' +
+
+'function onClientSrch(){' +
+'  var q=norm(document.getElementById("sclient").value.trim());' +
+'  var ac=document.getElementById("clac");' +
+'  if(!q){ac.innerHTML="";return;}' +
+'  var matches=clientList.filter(function(c){return norm(c.nom).indexOf(q)>=0;}).slice(0,8);' +
+'  ac.innerHTML=matches.map(function(c){return \'<div class="clai" data-nom="\'+c.nom+\'" onclick="pickClientBtn(this)">\'+c.nom+(c.telephone?" — "+c.telephone:"")+\'</div>\';}).join("");' +
+'}' +
+'function pickClientBtn(el){document.getElementById("sclient").value=el.getAttribute("data-nom");document.getElementById("clac").innerHTML="";}' +
+
+'function loadProducts(){' +
+'  document.getElementById("selinfo").textContent="Chargement des produits...";' +
+'  google.script.run' +
+'    .withSuccessHandler(function(list){' +
+'      prodList=list||[];prodMap={};' +
+'      for(var i=0;i<prodList.length;i++){prodMap[prodList[i].code]=prodList[i];}' +
+'      document.getElementById("selinfo").textContent=prodList.length+" produits disponibles.";' +
+'    })' +
+'    .withFailureHandler(function(e){document.getElementById("selinfo").textContent="Erreur : "+e.message;})' +
+'    .getAllProducts();' +
+'}' +
+
+'function onSrch(showAll){' +
+'  selProd=null;' +
+'  var q=norm(document.getElementById("sprod").value.trim());' +
+'  var ac=document.getElementById("aclist");' +
+'  if(!q&&!showAll){ac.innerHTML="";return;}' +
+'  var matches=[];' +
+'  for(var i=0;i<prodList.length&&matches.length<10;i++){' +
+'    var p=prodList[i];' +
+'    if(!q||norm(p.code).indexOf(q)>=0||norm(p.designation).indexOf(q)>=0)matches.push(p);' +
+'  }' +
+'  if(!matches.length){ac.innerHTML=\'<div class="aci" style="color:#90A4AE">Aucun résultat</div>\';return;}' +
+'  var html="";' +
+'  for(var j=0;j<matches.length;j++){' +
+'    var p=matches[j];' +
+'    var sc=p.stock<=0?"low":(p.stock<=p.seuil?"low":"ok");' +
+'    var sl=p.stock<=0?"⛔ Rupture":(p.stock<=p.seuil?"⚠️ "+p.stock+" restants":"✅ "+p.stock);' +
+'    html+=\'<div class="aci" data-code="\'+p.code+\'" onclick="pickProd(this)">\'+' +
+'           \'<span><span class="acode">\'+p.code+\'</span>\'+p.designation+\'</span>\'+' +
+'           \'<span class="ast \'+sc+\'">\'+sl+\' — \'+p.prixVente.toFixed(3)+\' DT</span></div>\';' +
+'  }' +
+'  ac.innerHTML=html;' +
+'}' +
+
+'function pickProd(el){' +
+'  var code=el.getAttribute("data-code");' +
+'  selProd=prodMap[code]||null;closeAC();' +
+'  if(!selProd){document.getElementById("selinfo").textContent="Introuvable.";return;}' +
+'  document.getElementById("sprod").value=selProd.code+" — "+selProd.designation;' +
+'  document.getElementById("qinp").max=selProd.stock>0?selProd.stock:9999;' +
+'  document.getElementById("qinp").value=1;' +
+'  document.getElementById("rinp").value=0;' +
+'  var info;' +
+'  if(selProd.stock<=0) info=\'<span style="color:#C62828">⛔ Rupture de stock</span>\';' +
+'  else if(selProd.stock<=selProd.seuil) info=\'<span style="color:#E65100">⚠️ Stock bas (\'+selProd.stock+\') — P.V : \'+selProd.prixVente.toFixed(3)+\' DT</span>\';' +
+'  else info=\'<span style="color:#2E7D32">✅ En stock (\'+selProd.stock+\') — P.V : \'+selProd.prixVente.toFixed(3)+\' DT</span>\';' +
+'  document.getElementById("selinfo").innerHTML=info;' +
+'  document.getElementById("qinp").focus();' +
+'}' +
+'function closeAC(){document.getElementById("aclist").innerHTML="";}' +
+
+'function addToCart(){' +
+'  if(!selProd){showMsg("Sélectionnez un produit dans la liste.","e");return;}' +
+'  var qty=parseInt(document.getElementById("qinp").value)||1;' +
+'  var remise=parseFloat(document.getElementById("rinp").value)||0;' +
+'  if(qty<=0){showMsg("Quantité invalide.","e");return;}' +
+'  if(selProd.stock<=0){showMsg("Produit en rupture de stock.","e");return;}' +
+'  if(qty>selProd.stock){showMsg("Stock insuffisant — max : "+selProd.stock,"e");return;}' +
+'  if(remise<0){showMsg("La remise ne peut pas être négative.","e");return;}' +
+'  if(remise>=selProd.prixVente){showMsg("La remise ne peut pas dépasser le prix de vente ("+selProd.prixVente.toFixed(3)+" DT).","e");return;}' +
+'  var existing=null;' +
+'  for(var i=0;i<cart.length;i++){if(cart[i].code===selProd.code){existing=cart[i];break;}}' +
+'  if(existing){' +
+'    if(existing.qty+qty>selProd.stock){showMsg("Stock insuffisant (total panier).","e");return;}' +
+'    existing.qty+=qty;' +
+'    if(remise>0) existing.remise=remise;' +
+'  }else{' +
+'    cart.push({code:selProd.code,designation:selProd.designation,prixVente:selProd.prixVente,stock:selProd.stock,qty:qty,remise:remise});' +
+'  }' +
+'  renderCart();' +
+'  document.getElementById("sprod").value="";' +
+'  document.getElementById("selinfo").textContent=prodList.length+" produits disponibles.";' +
+'  document.getElementById("qinp").value=1;' +
+'  document.getElementById("rinp").value=0;' +
+'  selProd=null;' +
+'  document.getElementById("msg").className="msg";' +
+'}' +
+
+'function removeItem(idx){cart.splice(idx,1);renderCart();}' +
+
+'function changeQty(idx,val){' +
+'  var q=parseInt(val)||1;' +
+'  if(q<1)q=1;' +
+'  if(q>cart[idx].stock){showMsg("Max : "+cart[idx].stock,"e");document.getElementById("q"+idx).value=cart[idx].qty;return;}' +
+'  cart[idx].qty=q;renderCart();' +
+'}' +
+
+'function changeRemise(idx,val){' +
+'  var r=parseFloat(val)||0;' +
+'  if(r<0)r=0;' +
+'  if(r>=cart[idx].prixVente){showMsg("Remise ≥ prix de vente ("+cart[idx].prixVente.toFixed(3)+" DT).","e");document.getElementById("r"+idx).value=cart[idx].remise;return;}' +
+'  cart[idx].remise=r;renderCart();' +
+'}' +
+
+'function renderCart(){' +
+'  var tbl=document.getElementById("ctable"),em=document.getElementById("empty");' +
+'  var tot=document.getElementById("totals"),btn=document.getElementById("btnSave");' +
+'  var badge=document.getElementById("badge"),body=document.getElementById("cbody");' +
+'  if(!cart.length){' +
+'    tbl.style.display="none";em.style.display="block";' +
+'    tot.style.display="none";btn.disabled=true;badge.style.display="none";return;' +
+'  }' +
+'  tbl.style.display="table";em.style.display="none";' +
+'  tot.style.display="block";btn.disabled=false;' +
+'  badge.style.display="inline-block";badge.textContent=cart.length+" art.";' +
+'  var totalNet=0,totalBrut=0,totalRemiseAmt=0,totalU=0,rows="";' +
+'  for(var i=0;i<cart.length;i++){' +
+'    var it=cart[i];' +
+'    var rem=it.remise||0;' +
+'    var prixNet=Math.max(it.prixVente-rem,0);' +
+'    var lt=prixNet*it.qty;' +
+'    var lb=it.prixVente*it.qty;' +
+'    totalNet+=lt;totalBrut+=lb;totalRemiseAmt+=rem*it.qty;totalU+=it.qty;' +
+'    var remBadge=rem>0?\'<span class="rem-badge">-\'+rem.toFixed(3)+\'</span>\':\'<span style="color:#90A4AE">—</span>\';' +
+'    rows+=\'<tr>\'+' +
+'      \'<td><strong>\'+it.code+\'</strong></td>\'+' +
+'      \'<td>\'+it.designation+\'</td>\'+' +
+'      \'<td style="text-align:right;color:#546E7A">\'+it.prixVente.toFixed(3)+\'</td>\'+' +
+'      \'<td style="text-align:center"><input id="q\'+i+\'" class="ninp" type="number" value="\'+it.qty+\'" min="1" max="\'+it.stock+\'" onchange="changeQty(\'+i+\',this.value)"></td>\'+' +
+'      \'<td style="text-align:center"><input id="r\'+i+\'" class="rinp" type="number" value="\'+rem.toFixed(3)+\'" min="0" step="0.001" max="\'+it.prixVente+\'" onchange="changeRemise(\'+i+\',this.value)"></td>\'+' +
+'      \'<td style="text-align:right;font-weight:700;color:#1A237E">\'+prixNet.toFixed(3)+\'</td>\'+' +
+'      \'<td style="text-align:right;font-weight:700">\'+lt.toFixed(3)+\'</td>\'+' +
+'      \'<td><button class="bdel" onclick="removeItem(\'+i+\')" title="Supprimer">✕</button></td>\'+' +
+'    \'</tr>\';' +
+'  }' +
+'  body.innerHTML=rows;' +
+'  document.getElementById("titems").textContent=totalU+" unité(s)";' +
+'  document.getElementById("tbrut").textContent=totalBrut.toFixed(3)+" DT";' +
+'  document.getElementById("tamount").textContent=totalNet.toFixed(3)+" DT";' +
+'  var remRow=document.getElementById("remrow");' +
+'  if(totalRemiseAmt>0){' +
+'    remRow.style.display="flex";' +
+'    document.getElementById("tremise").textContent="-"+totalRemiseAmt.toFixed(3)+" DT";' +
+'  }else{remRow.style.display="none";}' +
+'}' +
+
+'function doSave(){' +
+'  if(!cart.length){showMsg("Le panier est vide.","e");return;}' +
+'  var date=document.getElementById("sdate").value;' +
+'  if(!date){showMsg("Date obligatoire.","e");return;}' +
+'  var pay=document.getElementById("spay").value;' +
+'  var client=document.getElementById("sclient").value.trim();' +
+'  var btn=document.getElementById("btnSave");' +
+'  btn.disabled=true;btn.textContent="⏳ Enregistrement en cours...";' +
+'  var payload={' +
+'    cart:cart.map(function(i){return {code:i.code,designation:i.designation,prixVente:i.prixVente,qty:i.qty,remise:i.remise||0};}),'+
+'    date:date,payment:pay,client:client' +
+'  };' +
+'  google.script.run' +
+'    .withSuccessHandler(function(r){' +
+'      showMsg(r,"s");cart=[];renderCart();' +
+'      btn.disabled=false;btn.textContent="💾  Enregistrer la vente";' +
+'      document.getElementById("sclient").value="";' +
+'      loadProducts();' +
+'    })' +
+'    .withFailureHandler(function(err){' +
+'      showMsg("Erreur : "+err.message,"e");' +
+'      btn.disabled=false;btn.textContent="💾  Enregistrer la vente";' +
+'    })' +
+'    .saveSale(payload);' +
+'}' +
+
+'function showMsg(t,cls){' +
+'  var el=document.getElementById("msg");el.textContent=t;el.className="msg "+cls;' +
+'  if(cls==="e")setTimeout(function(){if(el.className==="msg e")el.className="msg";},6000);' +
+'}' +
+'<\/script></body></html>';
+}
+
+
+// ============================================================
+//  ★★★ NOUVEAU : DIALOGUE ANNULATION DE VENTE ★★★
+// ============================================================
+function showCancelSaleDialog() {
+  const html = HtmlService.createHtmlOutput(buildCancelSaleDialogHtml())
+    .setWidth(620).setHeight(560).setTitle("Annuler une Vente — Votre Boutique");
+  SpreadsheetApp.getUi().showModalDialog(html, "❌  Annuler une Vente");
+}
+
+function buildCancelSaleDialogHtml() {
+  return '<!DOCTYPE html>' +
+'<html><head><base target="_top"><style>' +
+'*{box-sizing:border-box;margin:0;padding:0;font-family:\'Segoe UI\',Arial,sans-serif}' +
+'body{background:#F5F5F5;padding:16px}' +
+'h2{background:#B71C1C;color:white;padding:14px 18px;border-radius:8px 8px 0 0;font-size:15px}' +
+'.card{background:white;border-radius:0 0 8px 8px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.12)}' +
+'.fg{margin-bottom:12px;position:relative}' +
+'label{display:block;font-size:12px;font-weight:600;color:#37474F;margin-bottom:4px}' +
+'input,select{width:100%;padding:8px 10px;border:1.5px solid #CFD8DC;border-radius:5px;font-size:13px;color:#263238}' +
+'input:focus{outline:none;border-color:#B71C1C}' +
+'#aclist{position:absolute;top:100%;left:0;right:0;z-index:9999;background:white;' +
+'border:1.5px solid #B71C1C;border-radius:0 0 6px 6px;max-height:220px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.2)}' +
+'.aci{padding:9px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #F5F5F5}' +
+'.aci:hover{background:#FFEBEE}' +
+'.aci.annule{color:#BDBDBD;text-decoration:line-through;cursor:not-allowed}' +
+'.aid{font-weight:700;color:#B71C1C;margin-right:8px;min-width:80px;display:inline-block}' +
+'.adate{font-size:11px;color:#90A4AE;margin-right:8px}' +
+'.atot{font-size:11px;font-weight:700;color:#1A237E;float:right}' +
+'.preview{background:#FFF8F8;border:1.5px solid #FFCDD2;border-radius:8px;padding:14px;margin:12px 0;display:none}' +
+'.prev-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #FFEBEE}' +
+'.prev-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}' +
+'.prev-label{color:#546E7A;font-weight:600}' +
+'.prev-val{color:#263238;font-weight:700}' +
+'.warn{background:#FFF3E0;border-left:4px solid #FF6F00;padding:10px 14px;border-radius:4px;font-size:12px;color:#E65100;margin-bottom:12px}' +
+'.btns{display:flex;gap:10px;margin-top:14px}' +
+'.bcancel-vente{flex:2;padding:10px;background:#B71C1C;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}' +
+'.bcancel-vente:disabled{background:#BDBDBD;cursor:default}' +
+'.bcancel-vente:hover:not(:disabled){background:#D32F2F}' +
+'.bclose{flex:1;padding:10px;background:#ECEFF1;color:#546E7A;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}' +
+'.msg{margin-top:10px;font-size:12px;padding:8px 12px;border-radius:5px;display:none}' +
+'.s{background:#E8F5E9;color:#2E7D32;display:block}' +
+'.e{background:#FFEBEE;color:#C62828;display:block}' +
+'</style></head>' +
+'<body>' +
+'<h2>❌  Annuler une Vente</h2>' +
+'<div class="card">' +
+'<div class="warn">⚠️ L\'annulation restituera le stock au produit et corrigera automatiquement les ventes du jour, le chiffre d\'affaires et le profit.</div>' +
+'<div class="fg">' +
+'<label>Rechercher une vente (ID, Code produit ou Désignation)</label>' +
+'<input type="text" id="srch" placeholder="ex: VTE-012 ou AMH4T ou AMPOUL..." autocomplete="off" oninput="doSearch()" onfocus="doSearch()">' +
+'<div id="aclist"></div>' +
+'</div>' +
+'<div id="preview" class="preview">' +
+'<div class="prev-row"><span class="prev-label">🆔 ID Vente</span><span class="prev-val" id="pId">—</span></div>' +
+'<div class="prev-row"><span class="prev-label">📅 Date</span><span class="prev-val" id="pDate">—</span></div>' +
+'<div class="prev-row"><span class="prev-label">📦 Produit</span><span class="prev-val" id="pProd">—</span></div>' +
+'<div class="prev-row"><span class="prev-label">🔢 Quantité</span><span class="prev-val" id="pQte">—</span></div>' +
+'<div class="prev-row"><span class="prev-label">💰 Total</span><span class="prev-val" id="pTotal">—</span></div>' +
+'<div class="prev-row"><span class="prev-label">💹 Profit</span><span class="prev-val" id="pProfit">—</span></div>' +
+'<div class="prev-row"><span class="prev-label">🏷️ Remise</span><span class="prev-val" id="pRemise">—</span></div>' +
+'<div class="prev-row"><span class="prev-label">💵 Mode de paiement</span><span class="prev-val" id="pPay">—</span></div>' +
+'</div>' +
+'<div class="btns">' +
+'<button class="bcancel-vente" id="btnCancel" onclick="doCancel()" disabled>❌  Confirmer l\'annulation</button>' +
+'<button class="bclose" onclick="google.script.host.close()">Fermer</button>' +
+'</div>' +
+'<div class="msg" id="msg"></div>' +
+'</div>' +
+'<script>' +
+'var salesList=[],selSale=null;' +
+
+'window.onload=function(){' +
+'  document.getElementById("srch").placeholder="Chargement...";' +
+'  google.script.run' +
+'    .withSuccessHandler(function(list){' +
+'      salesList=list||[];' +
+'      document.getElementById("srch").placeholder="ex: VTE-012 ou AMH4T ou AMPOUL...";' +
+'    })' +
+'    .withFailureHandler(function(e){document.getElementById("srch").placeholder="Erreur : "+e.message;})' +
+'    .getActiveSales();' +
+'  document.addEventListener("click",function(ev){' +
+'    if(!ev.target.closest("#srch")&&!ev.target.closest("#aclist"))closeAC();' +
+'  });' +
+'};' +
+
+'function norm(s){return (s||"").toString().toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"");}' +
+'function doSearch(){' +
+'  selSale=null;' +
+'  document.getElementById("btnCancel").disabled=true;' +
+'  document.getElementById("preview").style.display="none";' +
+'  var q=norm(document.getElementById("srch").value.trim());' +
+'  var ac=document.getElementById("aclist");' +
+'  if(!q){ac.innerHTML="";return;}' +
+'  var matches=[];' +
+'  for(var i=0;i<salesList.length&&matches.length<12;i++){' +
+'    var s=salesList[i];' +
+'    if(norm(s.id).indexOf(q)>=0||norm(s.code).indexOf(q)>=0||norm(s.designation).indexOf(q)>=0)' +
+'      matches.push(s);' +
+'  }' +
+'  if(!matches.length){ac.innerHTML=\'<div class="aci" style="color:#90A4AE">Aucune vente trouvée</div>\';return;}' +
+'  var html="";' +
+'  for(var j=0;j<matches.length;j++){' +
+'    var s=matches[j];' +
+'    var cls=s.annule?"aci annule":"aci";' +
+'    var tag=s.annule?\'<span style="color:#BDBDBD;font-size:10px"> [ANNULÉ]</span>\':"";' +
+'    html+=\'<div class="\'+cls+\'" data-row="\'+s.row+\'" onclick="pickSale(this)">\'+' +
+'          \'<span class="aid">\'+s.id+\'</span>\'+' +
+'          \'<span class="adate">\'+s.date+\'</span>\'+' +
+'          s.code+\' — \'+s.designation+\' × \'+s.qty+tag+' +
+'          \'<span class="atot">\'+s.total.toFixed(3)+\' DT</span>\'+' +
+'          \'</div>\';' +
+'  }' +
+'  ac.innerHTML=html;' +
+'}' +
+
+'function pickSale(el){' +
+'  if(el.classList.contains("annule")){showMsg("Cette vente est déjà annulée.","e");closeAC();return;}' +
+'  var row=parseInt(el.getAttribute("data-row"));' +
+'  selSale=null;' +
+'  for(var i=0;i<salesList.length;i++){if(salesList[i].row===row){selSale=salesList[i];break;}}' +
+'  closeAC();' +
+'  if(!selSale){showMsg("Vente introuvable.","e");return;}' +
+'  document.getElementById("srch").value=selSale.id+" — "+selSale.designation;' +
+'  document.getElementById("pId").textContent=selSale.id;' +
+'  document.getElementById("pDate").textContent=selSale.date;' +
+'  document.getElementById("pProd").textContent=selSale.code+" — "+selSale.designation;' +
+'  document.getElementById("pQte").textContent=selSale.qty+" unité(s)";' +
+'  document.getElementById("pTotal").textContent=selSale.total.toFixed(3)+" DT";' +
+'  document.getElementById("pProfit").textContent=selSale.profit.toFixed(3)+" DT";' +
+'  document.getElementById("pRemise").textContent=selSale.remise>0?selSale.remise.toFixed(3)+" DT / unité":"—";' +
+'  document.getElementById("pPay").textContent=selSale.payment;' +
+'  document.getElementById("preview").style.display="block";' +
+'  document.getElementById("btnCancel").disabled=false;' +
+'}' +
+
+'function closeAC(){document.getElementById("aclist").innerHTML="";}' +
+
+'function doCancel(){' +
+'  if(!selSale){showMsg("Sélectionnez d\'abord une vente.","e");return;}' +
+'  var btn=document.getElementById("btnCancel");' +
+'  btn.disabled=true;btn.textContent="⏳ Annulation en cours...";' +
+'  google.script.run' +
+'    .withSuccessHandler(function(r){' +
+'      showMsg(r,"s");' +
+'      btn.textContent="❌  Confirmer l\'annulation";' +
+// Retirer la vente annulée de la liste locale
+'      salesList=salesList.filter(function(s){return s.row!==selSale.row;});' +
+'      selSale=null;' +
+'      document.getElementById("srch").value="";' +
+'      document.getElementById("preview").style.display="none";' +
+'    })' +
+'    .withFailureHandler(function(err){' +
+'      showMsg("Erreur : "+err.message,"e");' +
+'      btn.disabled=false;btn.textContent="❌  Confirmer l\'annulation";' +
+'    })' +
+'    .cancelSale(selSale.row);' +
+'}' +
+
+'function showMsg(t,cls){' +
+'  var el=document.getElementById("msg");el.textContent=t;el.className="msg "+cls;' +
+'}' +
+'<\/script></body></html>';
+}
+
+
+// ============================================================
+//  ★★★ NOUVEAU : DIALOGUE CLIENT / FOURNISSEUR ★★★
+// ============================================================
+function showAddClientSupplierDialog() {
+  const html = HtmlService.createHtmlOutput(buildClientSupplierDialogHtml())
+    .setWidth(460).setHeight(560).setTitle("Client / Fournisseur — Votre Boutique");
+  SpreadsheetApp.getUi().showModalDialog(html, "👤  Ajouter un Client / Fournisseur");
+}
+
+function buildClientSupplierDialogHtml() {
+  return '<!DOCTYPE html>' +
+'<html><head><base target="_top"><style>' +
+'*{box-sizing:border-box;margin:0;padding:0;font-family:\'Segoe UI\',Arial,sans-serif}' +
+'body{background:#F5F5F5;padding:16px}' +
+'h2{background:#1A237E;color:white;padding:14px 16px;border-radius:8px 8px 0 0;font-size:15px}' +
+'.card{background:white;border-radius:0 0 8px 8px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.1)}' +
+'.tabs{display:flex;gap:8px;margin-bottom:14px}' +
+'.tab{flex:1;padding:8px;border:2px solid #B0BEC5;background:white;color:#546E7A;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}' +
+'.tab.on{border-color:#1A237E;background:#E8EAF6;color:#1A237E}' +
+'.fg{margin-bottom:13px;position:relative}' +
+'label{display:block;font-size:12px;font-weight:600;color:#37474F;margin-bottom:4px}' +
+'input,select{width:100%;padding:8px 10px;border:1.5px solid #CFD8DC;border-radius:5px;font-size:13px;color:#263238}' +
+'input:focus,select:focus{outline:none;border-color:#1A237E}' +
+'.hint{font-size:11px;color:#90A4AE;margin-top:3px}' +
+'.btns{display:flex;gap:10px;margin-top:16px}' +
+'.bs{flex:2;padding:10px;background:#FF6F00;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}' +
+'.bs:disabled{background:#BDBDBD;cursor:default}' +
+'.bc{flex:1;padding:10px;background:#ECEFF1;color:#546E7A;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}' +
+'.msg{margin-top:12px;font-size:12px;padding:8px 12px;border-radius:5px;display:none}' +
+'.s{background:#E8F5E9;color:#2E7D32;display:block}' +
+'.e{background:#FFEBEE;color:#C62828;display:block}' +
+'#aclist{position:absolute;top:100%;left:0;right:0;z-index:9999;background:white;border:1.5px solid #1A237E;' +
+'border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.2)}' +
+'.aci{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #F5F5F5}' +
+'.aci:hover{background:#E8EAF6}' +
+'</style></head><body>' +
+'<h2>👤  Client / Fournisseur</h2>' +
+'<div class="card">' +
+'<div class="tabs">' +
+'<button class="tab on" id="tc" onclick="setMode(\'client\')">🙋 Client</button>' +
+'<button class="tab" id="tf" onclick="setMode(\'supplier\')">🏭 Fournisseur</button>' +
+'</div>' +
+
+'<div id="clientForm">' +
+'<div class="fg"><label>Nom du Client *</label><input type="text" id="cnom" placeholder="ex: Ahmed Ben Salah"></div>' +
+'<div class="fg"><label>Téléphone</label><input type="text" id="ctel" placeholder="ex: 20 123 456"></div>' +
+'<div class="fg"><label>Adresse</label><input type="text" id="cadr" placeholder="ex: Tunis, Tunisie"></div>' +
+'</div>' +
+
+'<div id="supplierForm" style="display:none">' +
+'<div class="fg"><label>Nom du Fournisseur *</label><input type="text" id="fnom" placeholder="ex: Pièces Sfax SARL"></div>' +
+'<div class="fg"><label>Téléphone</label><input type="text" id="ftel" placeholder="ex: 74 123 456"></div>' +
+'<div class="fg"><label>Adresse</label><input type="text" id="fadr" placeholder="ex: Sfax, Tunisie"></div>' +
+'<div class="fg">' +
+'<label>Produit associé (Code ou Désignation) — optionnel</label>' +
+'<input type="text" id="fprod" placeholder="Tapez pour rechercher..." autocomplete="off" oninput="doSearch()">' +
+'<div id="aclist"></div>' +
+'<div class="hint">Facultatif : liez un article dès maintenant, ou enregistrez le fournisseur seul et liez-le plus tard.</div>' +
+'</div>' +
+'<div class="fg"><label>Prix Fournisseur (DT)</label><input type="number" id="fprix" placeholder="0.000" step="0.001" min="0"></div>' +
+'</div>' +
+
+'<div class="btns">' +
+'<button class="bs" id="btnS" onclick="doSave()">💾  Enregistrer</button>' +
+'<button class="bc" onclick="google.script.host.close()">Fermer</button>' +
+'</div>' +
+'<div class="msg" id="msg"></div>' +
+'</div>' +
+'<script>' +
+'var mode="client";var prodList=[],selCode="";' +
+'window.onload=function(){' +
+'  google.script.run.withSuccessHandler(function(list){prodList=list||[];}).getAllProducts();' +
+'};' +
+'function setMode(m){' +
+'  mode=m;' +
+'  document.getElementById("tc").className="tab"+(m==="client"?" on":"");' +
+'  document.getElementById("tf").className="tab"+(m==="supplier"?" on":"");' +
+'  document.getElementById("clientForm").style.display=m==="client"?"block":"none";' +
+'  document.getElementById("supplierForm").style.display=m==="supplier"?"block":"none";' +
+'  document.getElementById("msg").className="msg";' +
+'}' +
+'function norm(s){return (s||"").toString().toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"");}' +
+'function doSearch(){' +
+'  selCode="";' +
+'  var q=norm(document.getElementById("fprod").value.trim());' +
+'  var ac=document.getElementById("aclist");' +
+'  if(!q){ac.innerHTML="";return;}' +
+'  var matches=[];' +
+'  for(var i=0;i<prodList.length&&matches.length<8;i++){' +
+'    var p=prodList[i];' +
+'    if(norm(p.code).indexOf(q)>=0||norm(p.designation).indexOf(q)>=0)matches.push(p);' +
+'  }' +
+'  if(!matches.length){ac.innerHTML=\'<div class="aci" style="color:#90A4AE">Aucun résultat</div>\';return;}' +
+'  var html="";' +
+'  for(var j=0;j<matches.length;j++){' +
+'    var p=matches[j];' +
+'    html+=\'<div class="aci" data-code="\'+p.code+\'" data-desig="\'+p.designation+\'" onclick="pickBtn(this)">\'+p.code+\' — \'+p.designation+\'</div>\';' +
+'  }' +
+'  ac.innerHTML=html;' +
+'}' +
+'function pickBtn(el){pick(el.getAttribute("data-code"),el.getAttribute("data-desig"));}' +
+'function pick(code,desig){' +
+'  selCode=code;' +
+'  document.getElementById("fprod").value=code+" — "+desig;' +
+'  document.getElementById("aclist").innerHTML="";' +
+'}' +
+'function doSave(){' +
+'  var btn=document.getElementById("btnS");' +
+'  btn.disabled=true;btn.textContent="⏳ Enregistrement...";' +
+'  if(mode==="client"){' +
+'    var nom=document.getElementById("cnom").value.trim();' +
+'    if(!nom){showMsg("Le nom du client est obligatoire.","e");resetBtn();return;}' +
+'    google.script.run.withSuccessHandler(function(r){showMsg(r,"s");resetBtn();document.getElementById("cnom").value="";document.getElementById("ctel").value="";document.getElementById("cadr").value="";})' +
+'      .withFailureHandler(function(err){showMsg("Erreur : "+err.message,"e");resetBtn();})' +
+'      .saveClient({nom:nom,telephone:document.getElementById("ctel").value,adresse:document.getElementById("cadr").value});' +
+'  }else{' +
+'    var fnom=document.getElementById("fnom").value.trim();' +
+'    var fprix=parseFloat(document.getElementById("fprix").value)||0;' +
+'    if(!fnom){showMsg("Le nom du fournisseur est obligatoire.","e");resetBtn();return;}' +
+'    if(selCode&&fprix<=0){showMsg("Indiquez un prix fournisseur valide pour l\'article sélectionné.","e");resetBtn();return;}' +
+'    google.script.run.withSuccessHandler(function(r){showMsg(r,"s");resetBtn();})' +
+'      .withFailureHandler(function(err){showMsg("Erreur : "+err.message,"e");resetBtn();})' +
+'      .saveSupplier({nom:fnom,telephone:document.getElementById("ftel").value,adresse:document.getElementById("fadr").value,codeProduit:selCode,prixFournisseur:fprix});' +
+'  }' +
+'}' +
+'function resetBtn(){var btn=document.getElementById("btnS");btn.disabled=false;btn.textContent="💾  Enregistrer";}' +
+'function showMsg(t,cls){var el=document.getElementById("msg");el.textContent=t;el.className="msg "+cls;}' +
+'<\/script></body></html>';
+}
+
+// ============================================================
+//  ★★★ NOUVEAU : DIALOGUE COMMANDE FOURNISSEUR ★★★
+// ============================================================
+function showOrderDialog() {
+  const html = HtmlService.createHtmlOutput(buildOrderDialogHtml())
+    .setWidth(760).setHeight(680).setTitle("Commande Fournisseur — Votre Boutique");
+  SpreadsheetApp.getUi().showModalDialog(html, "📦  Créer une Commande Fournisseur");
+}
+
+function buildOrderDialogHtml() {
+  return '<!DOCTYPE html>' +
+'<html><head><base target="_top"><style>' +
+'*{box-sizing:border-box;margin:0;padding:0;font-family:\'Segoe UI\',Arial,sans-serif}' +
+'body{background:#F5F5F5;padding:12px}' +
+'h2{background:#283593;color:white;padding:12px 16px;border-radius:8px 8px 0 0;font-size:15px}' +
+'.card{background:white;border-radius:0 0 8px 8px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.1)}' +
+'.fg{margin-bottom:10px;position:relative}' +
+'label{display:block;font-size:12px;font-weight:600;color:#37474F;margin-bottom:4px}' +
+'input{width:100%;padding:8px 10px;border:1.5px solid #CFD8DC;border-radius:5px;font-size:13px;color:#263238}' +
+'#aclist{position:absolute;top:100%;left:0;right:0;z-index:9999;background:white;border:1.5px solid #283593;border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.2)}' +
+'.aci{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #F5F5F5}' +
+'.aci:hover{background:#E8EAF6}' +
+'table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}' +
+'thead tr{background:#283593;color:white}' +
+'th{padding:6px;text-align:left}' +
+'td{padding:5px 6px;border-bottom:1px solid #ECEFF1;vertical-align:middle}' +
+'td input{padding:4px 6px;font-size:12px}' +
+'.bo{background:#1A237E;color:white;border:none;border-radius:5px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer}' +
+'.bo:hover{background:#283593}' +
+'.bx{background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:4px 8px;font-weight:700;cursor:pointer}' +
+'.best{background:#E8F5E9;font-weight:700;color:#1B5E20}' +
+'.msg{margin-top:10px;font-size:12px;padding:8px 12px;border-radius:5px;display:none}' +
+'.s{background:#E8F5E9;color:#2E7D32;display:block}' +
+'.e{background:#FFEBEE;color:#C62828;display:block}' +
+'.cart{margin-top:14px;border:2px solid #283593;border-radius:8px;padding:10px;background:#FAFAFF}' +
+'.cart h3{font-size:13px;color:#1A237E;margin-bottom:4px}' +
+'.tot{text-align:right;font-weight:700;font-size:14px;color:#1A237E;margin-top:8px}' +
+'.acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}' +
+'.acts button{padding:10px 6px;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;color:white}' +
+'.v{background:#2E7D32}.p{background:#1565C0}.d{background:#C62828}' +
+'.acts button:disabled{opacity:.5;cursor:wait}' +
+'.bc{margin-top:12px;width:100%;padding:9px;background:#ECEFF1;color:#546E7A;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}' +
+'.hint{font-size:11px;color:#90A4AE;margin:6px 0 0}' +
+'</style></head><body>' +
+'<h2>📦  Créer une Commande Fournisseur</h2>' +
+'<div class="card">' +
+'<div class="fg"><label>Rechercher un produit (Code ou Désignation)</label>' +
+'<input type="text" id="sprod" placeholder="Tapez pour rechercher, ou cliquez pour voir tous les produits..." autocomplete="off" oninput="onSrch()" onfocus="onSrch(true)">' +
+'<div id="aclist"></div></div>' +
+'<div id="cmpZone"></div>' +
+'<div class="cart"><h3>🧺 Panier de commande</h3><div id="cartZone"></div></div>' +
+'<div class="msg" id="msg"></div>' +
+'<button class="bc" onclick="google.script.host.close()">Fermer</button>' +
+'</div>' +
+'<script>(' + orderDialogClient_.toString() + ')();<\/script></body></html>';
+}
+
+/** Script client du dialogue Commande (injecté tel quel dans la page). */
+function orderDialogClient_() {
+  var prodList = [], cart = [], curCode = "", curDesig = "", curSup = [], orderId = "";
+  function $(id) { return document.getElementById(id); }
+  function norm(s) { return (s || "").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function showMsg(t, cls) { var el = $("msg"); el.textContent = t; el.className = "msg " + cls; }
+
+  window.onSrch = function (showAll) {
+    var q = norm($("sprod").value.trim()), ac = $("aclist");
+    if (!q && !showAll) { ac.innerHTML = ""; return; }
+    var m = [];
+    for (var i = 0; i < prodList.length && m.length < 30; i++) {
+      var p = prodList[i];
+      if (!q || norm(p.code).indexOf(q) >= 0 || norm(p.designation).indexOf(q) >= 0) m.push(i);
+    }
+    ac.innerHTML = m.map(function (i) {
+      return '<div class="aci" data-i="' + i + '" onclick="pickProd(this)">' + esc(prodList[i].code) + ' — ' + esc(prodList[i].designation) + '</div>';
+    }).join("") || '<div class="aci">Aucun résultat</div>';
+  };
+  window.pickProd = function (el) {
+    var p = prodList[parseInt(el.getAttribute("data-i"))];
+    $("aclist").innerHTML = "";
+    $("sprod").value = p.code;
+    curCode = p.code; curDesig = p.designation;
+    $("cmpZone").innerHTML = "Chargement des fournisseurs...";
+    google.script.run.withSuccessHandler(renderCmp)
+      .withFailureHandler(function (e) { $("cmpZone").textContent = "Erreur : " + e.message; })
+      .getSuppliersForProduct(p.code);
+  };
+  function renderCmp(list) {
+    curSup = list || [];
+    var z = $("cmpZone");
+    if (!curSup.length) { z.innerHTML = '<p class="hint">Aucun fournisseur enregistré pour ce produit. Ajoutez-en via 👤 Ajouter un Client / Fournisseur.</p>'; return; }
+    var rows = "";
+    for (var i = 0; i < curSup.length; i++) {
+      var f = curSup[i];
+      rows += '<tr class="' + (i === 0 ? "best" : "") + '"><td>' + (i === 0 ? "🥇 " : "") + esc(f.nom) + '</td><td>' + Number(f.prixFournisseur).toFixed(3) +
+        ' DT</td><td><input type="number" id="q' + i + '" value="1" min="1" style="width:60px"></td>' +
+        '<td><button class="bo" data-idx="' + i + '" onclick="addCart(this)">➕ Ajouter au panier</button></td></tr>';
+    }
+    z.innerHTML = '<p class="hint">Prix d\'achat par fournisseur, du moins cher (🥇) au plus cher :</p><table><thead><tr><th>Fournisseur</th><th>Prix d\'Achat</th><th>Qté</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+  window.addCart = function (btn) {
+    var f = curSup[parseInt(btn.getAttribute("data-idx"))];
+    var q = parseInt($("q" + btn.getAttribute("data-idx")).value) || 1;
+    if (q < 1) q = 1;
+    var found = false;
+    for (var i = 0; i < cart.length; i++) {
+      if (cart[i].code === curCode && cart[i].fournisseur === f.nom) { cart[i].qte += q; found = true; break; }
+    }
+    if (!found) cart.push({ code: curCode, designation: curDesig, fournisseur: f.nom, prix: Number(f.prixFournisseur), qte: q });
+    orderId = "";
+    renderCart();
+    showMsg("🧺 " + curDesig + " ajouté au panier (" + q + " × " + f.nom + ").", "s");
+  };
+  window.setQty = function (i, v) {
+    var q = parseInt(v) || 1; cart[i].qte = q < 1 ? 1 : q; orderId = ""; renderCart();
+  };
+  window.delLine = function (i) { cart.splice(i, 1); orderId = ""; renderCart(); };
+  window.clearCart = function () { cart = []; orderId = ""; renderCart(); };
+  function total() { var t = 0; cart.forEach(function (l) { t += l.prix * l.qte; }); return t; }
+  function renderCart() {
+    var z = $("cartZone");
+    if (!cart.length) { z.innerHTML = '<p class="hint">Le panier est vide. Recherchez un produit puis cliquez sur « ➕ Ajouter au panier ».</p>'; return; }
+    var rows = cart.map(function (l, i) {
+      return '<tr><td>' + esc(l.code) + '</td><td>' + esc(l.designation) + '</td><td>' + esc(l.fournisseur) + '</td><td>' + l.prix.toFixed(3) +
+        '</td><td><input type="number" min="1" value="' + l.qte + '" style="width:58px" onchange="setQty(' + i + ',this.value)"></td><td>' +
+        (l.prix * l.qte).toFixed(3) + '</td><td><button class="bx" title="Retirer" onclick="delLine(' + i + ')">✕</button></td></tr>';
+    }).join("");
+    z.innerHTML = '<table><thead><tr><th>Code</th><th>Désignation</th><th>Fournisseur</th><th>Prix</th><th>Qté</th><th>Total</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="tot">Total : ' + total().toFixed(3) + ' DT' + (orderId ? ' — N° ' + esc(orderId) : '') + '</div>' +
+      '<div class="acts"><button class="v" id="bV" onclick="validateCart()">✅ Valider la commande</button>' +
+      '<button class="p" id="bP" onclick="printCart()">🖨️ Imprimer</button>' +
+      '<button class="d" id="bD" onclick="pdfCart()">📄 Télécharger PDF</button></div>' +
+      '<p class="hint" style="text-align:right"><a href="#" onclick="clearCart();return false">Vider le panier</a></p>';
+  }
+  function busy(on) { ["bV", "bP", "bD"].forEach(function (id) { if ($(id)) $(id).disabled = on; }); }
+  window.validateCart = function () {
+    if (!cart.length) return;
+    busy(true);
+    google.script.run.withSuccessHandler(function (r) {
+      orderId = r.id; renderCart();
+      showMsg("✅ Commande " + r.id + " enregistrée (" + r.count + " ligne(s), " + r.total.toFixed(3) + " DT) dans « Page 8 : Commandes ».", "s");
+    }).withFailureHandler(function (e) { busy(false); showMsg("Erreur : " + e.message, "e"); }).createOrderCart(cart);
+  };
+  window.printCart = function () {
+    if (!cart.length) return;
+    busy(true);
+    google.script.run.withSuccessHandler(function (html) {
+      busy(false);
+      var w = null;
+      try { w = window.open("", "_blank"); } catch (e) {}
+      if (!w) { showMsg("Impression bloquée par le navigateur : utilisez « Télécharger PDF » puis imprimez le PDF.", "e"); return; }
+      w.document.open(); w.document.write(html); w.document.close();
+      setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 400);
+    }).withFailureHandler(function (e) { busy(false); showMsg("Erreur : " + e.message, "e"); }).getOrderPrintHtml(cart, orderId);
+  };
+  window.pdfCart = function () {
+    if (!cart.length) return;
+    busy(true);
+    google.script.run.withSuccessHandler(function (r) {
+      busy(false);
+      var a = document.createElement("a");
+      a.href = "data:application/pdf;base64," + r.b64; a.download = r.name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      showMsg("📄 PDF généré : " + r.name, "s");
+    }).withFailureHandler(function (e) { busy(false); showMsg("Erreur PDF : " + e.message, "e"); }).getOrderPdf(cart, orderId);
+  };
+  window.onload = function () {
+    google.script.run.withSuccessHandler(function (l) { prodList = l || []; }).getAllProducts();
+    document.addEventListener("click", function (ev) {
+      if (!ev.target.closest("#sprod") && !ev.target.closest("#aclist")) $("aclist").innerHTML = "";
+    });
+    renderCart();
+  };
+}
+
+/** Crée toutes les lignes du panier sous UN SEUL numéro de commande. */
+function createOrderCart(lines) {
+  if (!lines || !lines.length) throw new Error("Le panier est vide.");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ensureOrdersSheet(ss);
+  let maxId = 0;
+  const last = s.getLastRow();
+  if (last >= 2) {
+    s.getRange(2, 1, last - 1, 1).getValues().forEach(r => {
+      const m = String(r[0]).match(/CMD-(\d+)/);
+      if (m) maxId = Math.max(maxId, parseInt(m[1]));
+    });
+  }
+  const id = "CMD-" + String(maxId + 1).padStart(3, "0");
+  const now = new Date();
+  let total = 0;
+  const rows = lines.map(l => {
+    const prod = findProduct(l.code) || { designation: l.designation || "Produit inconnu" };
+    const qte = Math.max(parseInt(l.qte) || 1, 1);
+    const prix = Number(l.prix) || 0;
+    total += prix * qte;
+    return [id, now, l.fournisseur, l.code, prod.designation, qte, prix, prix * qte, "En attente"];
+  });
+  const start = s.getLastRow() + 1;
+  s.getRange(start, 1, rows.length, 9).setValues(rows);
+  s.getRange(start, 2, rows.length, 1).setNumberFormat("DD/MM/YYYY");
+  s.getRange(start, 7, rows.length, 2).setNumberFormat('#,##0.000 " DT"');
+  return { id: id, count: rows.length, total: total };
+}
+
+/** Bon de commande HTML (imprimable), groupé par fournisseur. */
+function getOrderPrintHtml(lines, orderId) {
+  const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const groups = {};
+  (lines || []).forEach(l => { (groups[l.fournisseur] = groups[l.fournisseur] || []).push(l); });
+  const date = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
+  let grand = 0, body = "";
+  Object.keys(groups).forEach(f => {
+    let sub = 0, rows = "";
+    groups[f].forEach(l => {
+      const q = Math.max(parseInt(l.qte) || 1, 1), p = Number(l.prix) || 0;
+      sub += p * q;
+      rows += "<tr><td>" + esc(l.code) + "</td><td>" + esc(l.designation) + "</td><td class='n'>" + q +
+        "</td><td class='n'>" + p.toFixed(3) + "</td><td class='n'>" + (p * q).toFixed(3) + "</td></tr>";
+    });
+    grand += sub;
+    body += "<h3>Fournisseur : " + esc(f) + "</h3><table><thead><tr><th>Code</th><th>Désignation</th><th>Qté</th><th>Prix (DT)</th><th>Total (DT)</th></tr></thead><tbody>" +
+      rows + "</tbody><tfoot><tr><td colspan='4' class='n'>Sous-total</td><td class='n'>" + sub.toFixed(3) + "</td></tr></tfoot></table>";
+  });
+  return "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
+    "body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:24px}" +
+    "h1{font-size:20px;color:#1A237E;margin:0}h3{margin:18px 0 4px;font-size:13px;color:#1A237E}" +
+    ".top{display:flex;justify-content:space-between;border-bottom:2px solid #1A237E;padding-bottom:8px;margin-bottom:6px}" +
+    "table{width:100%;border-collapse:collapse}th{background:#283593;color:#fff;text-align:left;padding:5px}" +
+    "td{padding:5px;border-bottom:1px solid #ddd}.n{text-align:right}tfoot td{font-weight:bold;border-top:1px solid #999}" +
+    ".g{text-align:right;font-size:15px;font-weight:bold;margin-top:16px;color:#1A237E}" +
+    "</style></head><body><div class='top'><div><h1>BON DE COMMANDE</h1><div>Votre Boutique</div></div>" +
+    "<div style='text-align:right'><div><b>N° : " + esc(orderId || "Brouillon") + "</b></div><div>Date : " + date + "</div></div></div>" +
+    body + "<div class='g'>TOTAL GÉNÉRAL : " + grand.toFixed(3) + " DT</div></body></html>";
+}
+
+/** Bon de commande en PDF (base64) pour téléchargement. */
+function getOrderPdf(lines, orderId) {
+  const html = getOrderPrintHtml(lines, orderId);
+  const name = "Bon_de_commande_" + (orderId || "brouillon") + ".pdf";
+  const blob = Utilities.newBlob(html, "text/html", "bc.html").getAs("application/pdf").setName(name);
+  return { name: name, b64: Utilities.base64Encode(blob.getBytes()) };
+}
+
+
+// ============================================================
+
+/**
+ * Retourne la liste des ventes ACTIVES (non annulées) pour le dialog d'annulation.
+ */
+function getActiveSales() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const salesSheet = ss.getSheetByName(SHEET_SALES);
+  if (!salesSheet) return [];
+
+  const lastRow = salesSheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const data = salesSheet.getRange(2, 1, lastRow - 1, 12).getValues();
+  const result = [];
+
+  data.forEach((row, i) => {
+    if (!row[0] || !row[2]) return; // Ligne vide
+    const statut = String(row[10]).trim().toUpperCase();
+    // Formater la date
+    let dateStr = "";
+    if (row[1]) {
+      try {
+        dateStr = Utilities.formatDate(new Date(row[1]), Session.getScriptTimeZone(), "dd/MM/yyyy");
+      } catch(e) { dateStr = String(row[1]); }
+    }
+    result.push({
+      row:         i + 2,              // numéro de ligne réel dans la feuille
+      id:          String(row[0]),     // col A : ID vente
+      date:        dateStr,            // col B : date formatée
+      code:        String(row[2]),     // col C : code produit
+      designation: String(row[3]),     // col D : désignation
+      prixNet:     Number(row[4]) || 0,// col E : prix net
+      qty:         Number(row[5]) || 0,// col F : quantité
+      total:       Number(row[6]) || 0,// col G : total
+      payment:     String(row[7]),     // col H : mode paiement
+      profit:      Number(row[8]) || 0,// col I : profit
+      remise:      Number(row[9]) || 0,// col J : remise
+      annule:      statut === "ANNULÉ",// col K : statut
+      client:      String(row[11] || "Client Passager") // col L : client ★
+    });
+  });
+
+  // Trier par date décroissante (plus récent en premier)
+  result.sort(function(a, b) { return b.row - a.row; });
+  return result;
+}
+
+/**
+ * ★ FONCTION PRINCIPALE : Annule une vente.
+ * - Marque la ligne comme ANNULÉ (col K)
+ * - Applique un fond grisé et barré
+ * - Le stock est automatiquement recalculé via updateDashboardValues()
+ *   qui exclut les lignes ANNULÉ du qteVendueMap
+ */
+function cancelSale(rowNum) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const salesSheet = ss.getSheetByName(SHEET_SALES);
+  if (!salesSheet) throw new Error("Feuille Ventes introuvable.");
+
+  const lastRow = salesSheet.getLastRow();
+  if (rowNum < 2 || rowNum > lastRow) throw new Error("Numéro de ligne invalide : " + rowNum);
+
+  // Lire la ligne
+  const rowData = salesSheet.getRange(rowNum, 1, 1, 12).getValues()[0];
+  const idVente    = String(rowData[0]);
+  const codeP      = String(rowData[2]);
+  const designation= String(rowData[3]);
+  const qty        = Number(rowData[5]) || 0;
+  const total      = Number(rowData[6]) || 0;
+  const profit     = Number(rowData[8]) || 0;
+  const statutActuel = String(rowData[10]).trim().toUpperCase();
+
+  // Vérification : déjà annulée ?
+  if (statutActuel === "ANNULÉ") {
+    throw new Error("La vente " + idVente + " est déjà annulée.");
+  }
+
+  // ★ Marquer comme ANNULÉ dans la col K (index 11, colonne 11)
+  salesSheet.getRange(rowNum, 11).setValue("ANNULÉ");
+
+  // Formatage visuel : texte grisé + fond rose pâle
+  salesSheet.getRange(rowNum, 1, 1, 12)
+    .setBackground("#FFF5F5")
+    .setFontColor("#BDBDBD");
+
+  SpreadsheetApp.flush();
+
+  // ★ Recalculer le tableau de bord — le stock est automatiquement restauré
+  // car updateDashboardValues() exclut les lignes ANNULÉ du qteVendueMap
+  updateDashboardValues();
+
+  return "✅  Vente " + idVente + " annulée !\n" +
+         "Produit : " + designation + " (" + codeP + ")\n" +
+         "Quantité restituée au stock : " + qty + " unité(s)\n" +
+         "Montant retiré des ventes : " + total.toFixed(3) + " DT\n" +
+         "Profit corrigé : -" + profit.toFixed(3) + " DT\n" +
+         "Le Tableau de Bord a été mis à jour automatiquement.";
+}
+
+
+// ============================================================
+//  12. FONCTIONS SERVEUR PRODUITS & VENTES
+// ============================================================
+
+function findProduct(query) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PRODUCTS);
+  if (!sheet) return null;
+  const data = sheet.getDataRange().getValues();
+  const q = query.toLowerCase();
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (!r[0]) continue;
+    if (String(r[0]).toLowerCase().includes(q) || String(r[1]).toLowerCase().includes(q)) {
+      return { code:String(r[0]), designation:String(r[1]), categorie:String(r[2]),
+               prixAchat:Number(r[3])||0, prixVente:Number(r[4])||0,
+               stockInitial:Number(r[5])||0, seuil:Number(r[8])||0 };
+    }
+  }
+  return null;
+}
+
+/**
+ * ★ Met à jour la colonne "Prix d'Achat (DT)" d'un produit (Page 2, col D)
+ * avec le prix fournisseur le PLUS ÉLEVÉ parmi tous les fournisseurs liés à ce code produit.
+ */
+function recalcProductPurchasePrice(code) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_PRODUCTS);
+  if (!sheet) return;
+
+  const suppSheet = ss.getSheetByName(SHEET_SUPPLIERS);
+  let maxPrix = 0;
+  if (suppSheet) {
+    const last = suppSheet.getLastRow();
+    if (last >= 2) {
+      const rows = suppSheet.getRange(2, 1, last - 1, 5).getValues();
+      rows.forEach(r => {
+        if (String(r[3]).toLowerCase() === String(code).toLowerCase()) {
+          maxPrix = Math.max(maxPrix, Number(r[4]) || 0);
+        }
+      });
+    }
+  }
+  if (maxPrix <= 0) return; // aucun fournisseur avec prix connu : on ne touche pas au prix existant
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase() === String(code).toLowerCase()) {
+      sheet.getRange(i + 1, 4).setValue(maxPrix).setNumberFormat('#,##0.000 " DT"');
+      break;
+    }
+  }
+}
+
+function saveProduct(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PRODUCTS);
+  if (!sheet) throw new Error("Feuille Produits introuvable. Lancez l'initialisation.");
+
+  if (!data.code || !data.designation || !data.categorie)
+    throw new Error("Champs obligatoires manquants.");
+
+  // ★ Le fournisseur est obligatoire lors de l'AJOUT d'un produit
+  //   (un article pourra ensuite avoir plusieurs fournisseurs — voir Page 6 : Fournisseurs).
+  const fournisseur = String(data.fournisseur || "").trim();
+  const prixFournisseur = Number(data.prixFournisseur) || 0;
+  if (data.mode === 'add') {
+    if (!fournisseur) throw new Error("Le fournisseur est obligatoire pour ajouter un nouveau produit.");
+    if (prixFournisseur <= 0) throw new Error("Indiquez le prix d'achat fournisseur pour ce produit.");
+  }
+
+  // ★ Prix d'Achat initial = prix fournisseur saisi ; sera recalculé au MAX après liaison fournisseur (voir saveSupplier)
+  const pa = prixFournisseur > 0 ? prixFournisseur : (Number(data.prixAchat) || 0);
+  const pv = Number(data.prixVente) || 0;
+  const si = parseInt(data.stockInitial) || 0;
+  const se = parseInt(data.seuil) || 0;
+
+  const allData = sheet.getDataRange().getValues();
+  let existingRow = -1;
+  for (let i = 1; i < allData.length; i++) {
+    if (String(allData[i][0]).toLowerCase() === String(data.code).toLowerCase()) {
+      existingRow = i + 1; break;
+    }
+  }
+
+  if (data.mode === 'add' && existingRow > 0)
+    throw new Error("Le code « " + data.code + " » existe déjà. Utilisez le mode Modifier.");
+  if (data.mode === 'edit' && existingRow < 0)
+    throw new Error("Code « " + data.code + " » introuvable. Vérifiez le code.");
+
+  const targetRow = (data.mode === 'edit') ? existingRow : sheet.getLastRow() + 1;
+
+  if (data.mode === 'add') {
+    sheet.getRange(targetRow, 1, 1, 6).setValues([[data.code, data.designation, data.categorie, pa, pv, si]]);
+    sheet.getRange(targetRow, 9).setValue(se);
+    // ★ Lie automatiquement le fournisseur saisi à ce nouvel article (Page 6 : Fournisseurs)
+    saveSupplier({ nom: fournisseur, telephone: data.fournisseurTel || "", adresse: data.fournisseurAdr || "",
+                   codeProduit: data.code, prixFournisseur: prixFournisseur });
+  } else {
+    sheet.getRange(targetRow, 1, 1, 6).setValues([[data.code, data.designation, data.categorie, pa, pv, si]]);
+    sheet.getRange(targetRow, 9).setValue(se);
+    // En mode Modifier, un nouveau fournisseur/prix est optionnel mais met aussi à jour le Prix d'Achat
+    if (fournisseur && prixFournisseur > 0) {
+      saveSupplier({ nom: fournisseur, telephone: data.fournisseurTel || "", adresse: data.fournisseurAdr || "",
+                     codeProduit: data.code, prixFournisseur: prixFournisseur });
+    }
+    recalculateSalesRows(SpreadsheetApp.getActiveSpreadsheet());
+  }
+
+  SpreadsheetApp.flush();
+  updateDashboardValues();
+
+  return data.mode === 'add'
+    ? "✅  Produit « " + data.designation + " » ajouté avec succès (fournisseur : " + fournisseur + ") !"
+    : "✅  Produit « " + data.designation + " » mis à jour !";
+}
+
+/**
+ * ★ MODIFICATION : getAllProducts() retourne maintenant `stock` = stockActuel
+ * calculé en JS en excluant les ventes ANNULÉES — utilisé pour afficher
+ * le stock actuel dans la fenêtre Modifier et dans la fenêtre Vente.
+ */
+function getAllProducts() {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_PRODUCTS);
+  if (!sheet) return [];
+
+  const salesSheet = ss.getSheetByName(SHEET_SALES);
+  const qteVendueMap = {};
+  if (salesSheet) {
+    const sv = salesSheet.getDataRange().getValues();
+    for (let i = 1; i < sv.length; i++) {
+      if (!sv[i][2]) continue;
+      // ★ Exclure les ventes ANNULÉES du calcul du stock actuel
+      if (String(sv[i][10]).trim().toUpperCase() === "ANNULÉ") continue;
+      const code = String(sv[i][2]);
+      qteVendueMap[code] = (qteVendueMap[code] || 0) + (Number(sv[i][5]) || 0);
+    }
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const result = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (!r[0]) continue;
+    const code         = String(r[0]);
+    const stockInitial = Number(r[5]) || 0;
+    const stockActuel  = stockInitial - (qteVendueMap[code] || 0); // ★ Stock réel après ventes (hors annulées)
+    result.push({
+      code:         code,
+      designation:  String(r[1]),
+      categorie:    String(r[2]),
+      prixAchat:    Number(r[3]) || 0,
+      prixVente:    Number(r[4]) || 0,
+      stockInitial: stockInitial,   // Pour affichage info dans le dialog modifier
+      stock:        stockActuel,    // ★ Stock ACTUEL = ce qui est physiquement disponible
+      seuil:        Number(r[8]) || 0
+    });
+  }
+  return result;
+}
+
+function saveSale(payload) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const salesSheet = ss.getSheetByName(SHEET_SALES);
+  const prodSheet  = ss.getSheetByName(SHEET_PRODUCTS);
+  if (!salesSheet) throw new Error("Feuille Ventes introuvable. Lancez l'initialisation.");
+  if (!prodSheet)  throw new Error("Feuille Produits introuvable. Lancez l'initialisation.");
+
+  const cart    = payload.cart;
+  const date    = payload.date;
+  const payment = payload.payment;
+  // ★ Client : doit correspondre à un client EXISTANT (sélectionné ou tapé) ; sinon "Client Passager"
+  const typedClient = String(payload.client || "").trim();
+  let client = "Client Passager";
+  if (typedClient) {
+    const existing = getAllClients().find(c => c.nom.toLowerCase() === typedClient.toLowerCase());
+    client = existing ? existing.nom : "Client Passager";
+  }
+
+  if (!cart || cart.length === 0) throw new Error("Panier vide.");
+  if (!date)    throw new Error("Date manquante.");
+  if (!payment) throw new Error("Mode de paiement manquant.");
+
+  const prodData = prodSheet.getDataRange().getValues();
+  const prodMap = {};
+  for (let i = 1; i < prodData.length; i++) {
+    const r = prodData[i];
+    if (!r[0]) continue;
+    prodMap[String(r[0])] = {
+      designation: String(r[1]),
+      prixAchat:   Number(r[3]) || 0,
+      prixVente:   Number(r[4]) || 0
+    };
+  }
+
+  let maxId = 0;
+  const lastRow = Math.max(salesSheet.getLastRow(), 1);
+  const colA = salesSheet.getRange("A2:A" + lastRow).getValues();
+  colA.forEach(r => {
+    const m = String(r[0]).match(/VTE-(\d+)/);
+    if (m) maxId = Math.max(maxId, parseInt(m[1]));
+  });
+
+  let startRow = salesSheet.getLastRow() + 1;
+  for (let i = 0; i < colA.length; i++) {
+    if (!colA[i][0]) { startRow = i + 2; break; }
+  }
+
+  const saleDate = new Date(date + "T12:00:00");
+
+  const rowsData = [];
+  cart.forEach((item) => {
+    maxId++;
+    const prod    = prodMap[item.code] || { designation: item.designation || "Produit inconnu", prixAchat: 0, prixVente: Number(item.prixVente) || 0 };
+    const qte     = Number(item.qty) || 0;
+    const remise  = Number(item.remise) || 0;
+    const prixNet = Math.max(prod.prixVente - remise, 0);
+    const total   = prixNet * qte;
+    const profit  = (prixNet - prod.prixAchat) * qte;
+
+    rowsData.push([
+      "VTE-" + String(maxId).padStart(3, "0"),  // A : ID
+      saleDate,                                   // B : Date
+      item.code,                                  // C : Code produit
+      prod.designation,                           // D : Désignation
+      prixNet,                                    // E : Prix Net
+      qte,                                        // F : Quantité
+      total,                                      // G : Total
+      payment,                                    // H : Mode paiement
+      profit,                                     // I : Profit
+      remise,                                     // J : Remise
+      "",                                         // K : Statut (vide = actif) ★
+      client                                       // L : Client ★
+    ]);
+  });
+
+  rowsData.forEach((row, i) => {
+    const r = startRow + i;
+    salesSheet.getRange(r, 1, 1, 12).setValues([row]);   // ★ 12 colonnes
+    salesSheet.getRange(r, 2).setNumberFormat("DD/MM/YYYY");
+    salesSheet.getRange(r, 5).setNumberFormat('#,##0.000 " DT"');
+    salesSheet.getRange(r, 7).setNumberFormat('#,##0.000 " DT"');
+    salesSheet.getRange(r, 9).setNumberFormat('#,##0.000 " DT"');
+    salesSheet.getRange(r, 10).setNumberFormat('#,##0.000 " DT"');
+  });
+
+  SpreadsheetApp.flush();
+  updateDashboardValues();
+
+  const totalAmount = rowsData.reduce((s, row) => s + (Number(row[6])||0), 0);
+  const totalProfit = rowsData.reduce((s, row) => s + (Number(row[8])||0), 0);
+  const totalRemise = rowsData.reduce((s, row) => s + (Number(row[9])||0) * (Number(row[5])||0), 0);
+  const nbUnites    = rowsData.reduce((s, row) => s + (Number(row[5])||0), 0);
+  let msg = "✅  Vente enregistrée ! " + cart.length + " référence(s) | " +
+    nbUnites + " unité(s) | Total : " + totalAmount.toFixed(3) + " DT | Profit : " + totalProfit.toFixed(3) + " DT";
+  if (totalRemise > 0) msg += " | Remise accordée : " + totalRemise.toFixed(3) + " DT";
+  return msg;
+}
+
+
+// ============================================================
+//  ★★★ NOUVEAU : CLIENTS / FOURNISSEURS / COMMANDES ★★★
+// ============================================================
+
+/** Enregistre un client (Page 7). Empêche les doublons de nom. */
+function saveClient(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ensureClientsSheet(ss);
+  const nom = String(data.nom || "").trim();
+  if (!nom) throw new Error("Le nom du client est obligatoire.");
+
+  const last = s.getLastRow();
+  if (last >= 2) {
+    const noms = s.getRange(2, 1, last - 1, 1).getValues();
+    for (let i = 0; i < noms.length; i++) {
+      if (String(noms[i][0]).trim().toLowerCase() === nom.toLowerCase())
+        throw new Error("Le client « " + nom + " » existe déjà.");
+    }
+  }
+  s.appendRow([nom, data.telephone || "", data.adresse || "", new Date()]);
+  s.getRange(s.getLastRow(), 4).setNumberFormat("DD/MM/YYYY");
+  return "✅  Client « " + nom + " » enregistré avec succès !";
+}
+
+/** Enregistre un fournisseur pour un produit donné (Page 6). Un fournisseur peut avoir plusieurs lignes (une par produit). */
+function saveSupplier(data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ensureSuppliersSheet(ss);
+  const nom = String(data.nom || "").trim();
+  const code = String(data.codeProduit || "").trim();
+  if (!nom) throw new Error("Le nom du fournisseur est obligatoire.");
+  // ★ Le produit n'est plus obligatoire : un fournisseur peut être enregistré seul,
+  // puis lié à un ou plusieurs articles plus tard.
+  if (!code) {
+    s.appendRow([nom, data.telephone || "", data.adresse || "", "", "", new Date()]);
+    const r = s.getLastRow();
+    s.getRange(r, 6).setNumberFormat("DD/MM/YYYY");
+    return "✅  Fournisseur « " + nom + " » enregistré (sans article associé) !";
+  }
+
+  const prod = findProduct(code);
+  // Cherche une ligne existante (même fournisseur + même produit) pour mise à jour du prix
+  const last = s.getLastRow();
+  let existingRow = -1;
+  if (last >= 2) {
+    const rows = s.getRange(2, 1, last - 1, 4).getValues();
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim().toLowerCase() === nom.toLowerCase() &&
+          String(rows[i][3]).trim().toLowerCase() === code.toLowerCase()) { existingRow = i + 2; break; }
+    }
+  }
+  const prix = Number(data.prixFournisseur) || 0;
+  if (existingRow > 0) {
+    s.getRange(existingRow, 2).setValue(data.telephone || "");
+    s.getRange(existingRow, 3).setValue(data.adresse || "");
+    s.getRange(existingRow, 5).setValue(prix).setNumberFormat('#,##0.000 " DT"');
+    s.getRange(existingRow, 6).setValue(new Date()).setNumberFormat("DD/MM/YYYY");
+  } else {
+    s.appendRow([nom, data.telephone || "", data.adresse || "", code, prix, new Date()]);
+    const r = s.getLastRow();
+    s.getRange(r, 5).setNumberFormat('#,##0.000 " DT"');
+    s.getRange(r, 6).setNumberFormat("DD/MM/YYYY");
+  }
+  // ★ Le Prix d'Achat du produit affiche toujours le DERNIER prix fournisseur saisi
+  if (prix > 0) recalcProductPurchasePrice(code);
+  return "✅  Fournisseur « " + nom + " » enregistré pour le produit " + code +
+    (prod ? " (" + prod.designation + ")" : "") + " !";
+}
+
+function getAllClients() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ensureClientsSheet(ss);
+  const last = s.getLastRow();
+  if (last < 2) return [];
+  const data = s.getRange(2, 1, last - 1, 4).getValues();
+  return data.filter(r => r[0]).map(r => ({ nom: String(r[0]), telephone: String(r[1]), adresse: String(r[2]) }));
+}
+
+function getAllSuppliers() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ensureSuppliersSheet(ss);
+  const last = s.getLastRow();
+  if (last < 2) return [];
+  const data = s.getRange(2, 1, last - 1, 6).getValues();
+  return data.filter(r => r[0]).map(r => ({
+    nom: String(r[0]), telephone: String(r[1]), adresse: String(r[2]),
+    codeProduit: String(r[3]), prixFournisseur: Number(r[4]) || 0
+  }));
+}
+
+/**
+ * ★ Comparateur de prix fournisseurs pour un produit (et tout produit de même désignation).
+ * Retourne la liste des fournisseurs triée par prix croissant.
+ */
+function getSuppliersForProduct(code) {
+  const prod = findProduct(code);
+  if (!prod) return [];
+
+  // Récupère tous les codes produits qui partagent la même désignation (comparaison inter-produits)
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const prodSheet = ss.getSheetByName(SHEET_PRODUCTS);
+  const sameDesigCodes = { };
+  sameDesigCodes[String(code)] = true;
+  if (prodSheet) {
+    const pData = prodSheet.getDataRange().getValues();
+    for (let i = 1; i < pData.length; i++) {
+      if (String(pData[i][1]).trim().toLowerCase() === prod.designation.trim().toLowerCase()) {
+        sameDesigCodes[String(pData[i][0])] = true;
+      }
+    }
+  }
+
+  const suppliers = getAllSuppliers().filter(s => sameDesigCodes[s.codeProduit]);
+  suppliers.sort((a, b) => a.prixFournisseur - b.prixFournisseur);
+  return suppliers;
+}
+
+/**
+ * ★ Crée une ligne de commande fournisseur pour un produit donné.
+ */
+function createOrderLine(codeProduit, nomFournisseur, qte, prixFournisseur) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const s = ensureOrdersSheet(ss);
+  const prod = findProduct(codeProduit) || { designation: "Produit inconnu" };
+  qte = Math.max(parseInt(qte) || 1, 1);
+  const prix = Number(prixFournisseur) || 0;
+  const total = prix * qte;
+
+  let maxId = 0;
+  const last = s.getLastRow();
+  if (last >= 2) {
+    s.getRange(2, 1, last - 1, 1).getValues().forEach(r => {
+      const m = String(r[0]).match(/CMD-(\d+)/);
+      if (m) maxId = Math.max(maxId, parseInt(m[1]));
+    });
+  }
+  const id = "CMD-" + String(maxId + 1).padStart(3, "0");
+  s.appendRow([id, new Date(), nomFournisseur, codeProduit, prod.designation, qte, prix, total, "En attente"]);
+  const r = s.getLastRow();
+  s.getRange(r, 2).setNumberFormat("DD/MM/YYYY");
+  s.getRange(r, 7, 1, 2).setNumberFormat('#,##0.000 " DT"');
+  return { id: id, designation: prod.designation, total: total };
+}
+
+/**
+ * ★ Retourne la liste des produits actuellement en alerte (rupture ou sous seuil)
+ * — utilisée par le dialogue "Commander depuis les alertes" (recherche / liste déroulante).
+ */
+function getAlertProducts() {
+  const products = getAllProducts();
+  return products
+    .filter(p => p.stock <= p.seuil)
+    .map(p => ({ code: p.code, designation: p.designation, stock: p.stock, seuil: p.seuil }));
+}
+
+/**
+ * ★ Ouvre le dialogue de commande depuis les alertes (recherche/liste + qté + meilleur fournisseur).
+ */
+function showOrderFromAlertsDialog() {
+  const html = HtmlService.createHtmlOutput(buildOrderFromAlertsDialogHtml())
+    .setWidth(560).setHeight(560).setTitle("Commander depuis les Alertes — Votre Boutique");
+  SpreadsheetApp.getUi().showModalDialog(html, "🛒  Créer une Commande depuis les Alertes");
+}
+
+function buildOrderFromAlertsDialogHtml() {
+  return '<!DOCTYPE html>' +
+'<html><head><base target="_top"><style>' +
+'*{box-sizing:border-box;margin:0;padding:0;font-family:\'Segoe UI\',Arial,sans-serif}' +
+'body{background:#F5F5F5;padding:16px}' +
+'h2{background:#B71C1C;color:white;padding:14px 16px;border-radius:8px 8px 0 0;font-size:15px}' +
+'.card{background:white;border-radius:0 0 8px 8px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.1)}' +
+'.fg{margin-bottom:13px;position:relative}' +
+'label{display:block;font-size:12px;font-weight:600;color:#37474F;margin-bottom:4px}' +
+'input,select{width:100%;padding:8px 10px;border:1.5px solid #CFD8DC;border-radius:5px;font-size:13px;color:#263238}' +
+'#aclist{position:absolute;top:100%;left:0;right:0;z-index:9999;background:white;border:1.5px solid #B71C1C;' +
+'border-radius:0 0 6px 6px;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.2)}' +
+'.aci{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #F5F5F5}' +
+'.aci:hover{background:#FFEBEE}' +
+'.best{background:#FFF8E1;border:1.5px solid #FFB300;border-radius:6px;padding:10px 14px;font-size:12px;margin-top:6px}' +
+'.r2{display:grid;grid-template-columns:1fr 1fr;gap:10px}' +
+'.btns{display:flex;gap:10px;margin-top:14px}' +
+'.bs{flex:2;padding:10px;background:#B71C1C;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}' +
+'.bs:disabled{background:#BDBDBD;cursor:default}' +
+'.bc{flex:1;padding:10px;background:#ECEFF1;color:#546E7A;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}' +
+'.msg{margin-top:12px;font-size:12px;padding:8px 12px;border-radius:5px;display:none}' +
+'.s{background:#E8F5E9;color:#2E7D32;display:block}' +
+'.e{background:#FFEBEE;color:#C62828;display:block}' +
+'</style></head><body>' +
+'<h2>🛒  Commander depuis les Alertes</h2>' +
+'<div class="card">' +
+'<div class="fg">' +
+'<label>Rechercher (Code ou Désignation), ou cliquez pour voir tous les produits en alerte</label>' +
+'<input type="text" id="srch" placeholder="Tapez pour rechercher..." autocomplete="off" oninput="onSrch()" onfocus="onSrch(true)">' +
+'<div id="aclist"></div>' +
+'</div>' +
+'<div class="fg"><label>Quantité à commander</label><input type="number" id="qte" value="1" min="1"></div>' +
+'<div id="bestZone"></div>' +
+'<div class="btns">' +
+'<button class="bs" id="btnC" onclick="doOrder()" disabled>🛒  Commander</button>' +
+'<button class="bc" onclick="google.script.host.close()">Fermer</button>' +
+'</div>' +
+'<div class="msg" id="msg"></div>' +
+'</div>' +
+'<script>' +
+'var alertList=[],selCode="",bestSupplier=null;' +
+'function norm(s){return (s||"").toString().toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"");}' +
+'window.onload=function(){' +
+'  google.script.run.withSuccessHandler(function(list){alertList=list||[];}).getAlertProducts();' +
+'  document.addEventListener("click",function(ev){' +
+'    if(!ev.target.closest("#srch")&&!ev.target.closest("#aclist"))document.getElementById("aclist").innerHTML="";' +
+'  });' +
+'};' +
+'function onSrch(showAll){' +
+'  var q=norm(document.getElementById("srch").value.trim());' +
+'  var ac=document.getElementById("aclist");' +
+'  if(!q&&!showAll){ac.innerHTML="";return;}' +
+'  var matches=alertList.filter(function(p){return !q||norm(p.code).indexOf(q)>=0||norm(p.designation).indexOf(q)>=0;}).slice(0,30);' +
+'  ac.innerHTML=matches.map(function(p){return \'<div class="aci" data-code="\'+p.code+\'" onclick="onSrchPick(this)">\'+p.code+\' — \'+p.designation+\' (stock:\'+p.stock+\'/seuil:\'+p.seuil+\')</div>\';}).join("")||\'<div class="aci">Aucun résultat</div>\';' +
+'}' +
+'function onSrchPick(el){onPick(el.getAttribute("data-code"));document.getElementById("aclist").innerHTML="";}' +
+'function onPick(code){' +
+'  selCode=code;bestSupplier=null;' +
+'  document.getElementById("btnC").disabled=true;' +
+'  if(!code){document.getElementById("bestZone").innerHTML="";return;}' +
+'  var p=alertList.find(function(x){return x.code===code;});' +
+'  document.getElementById("srch").value=p?p.code+" — "+p.designation:code;' +
+'  document.getElementById("qte").value=p?Math.max(p.seuil-p.stock+1,1):1;' +
+'  document.getElementById("bestZone").innerHTML="Recherche du meilleur fournisseur...";' +
+'  google.script.run.withSuccessHandler(function(list){' +
+'    if(!list||!list.length){document.getElementById("bestZone").innerHTML=\'<div class="best" style="border-color:#EF5350;background:#FFEBEE">⚠️ Aucun fournisseur enregistré pour ce produit.</div>\';return;}' +
+'    bestSupplier=list[0];' +
+'    document.getElementById("bestZone").innerHTML=\'<div class="best">🥇 Meilleur prix : <strong>\'+bestSupplier.nom+\'</strong> — \'+bestSupplier.prixFournisseur.toFixed(3)+\' DT / unité</div>\';' +
+'    document.getElementById("btnC").disabled=false;' +
+'  }).getSuppliersForProduct(code);' +
+'}' +
+'function doOrder(){' +
+'  if(!selCode||!bestSupplier){showMsg("Sélectionnez un produit avec un fournisseur disponible.","e");return;}' +
+'  var qte=parseInt(document.getElementById("qte").value)||1;' +
+'  var btn=document.getElementById("btnC");' +
+'  btn.disabled=true;btn.textContent="⏳ Commande en cours...";' +
+'  google.script.run.withSuccessHandler(function(r){' +
+'    showMsg("✅  Commande "+r.id+" créée pour "+r.designation+" ("+r.total.toFixed(3)+" DT).","s");' +
+'    btn.disabled=false;btn.textContent="🛒  Commander";' +
+'  }).withFailureHandler(function(e){showMsg("Erreur : "+e.message,"e");btn.disabled=false;btn.textContent="🛒  Commander";})' +
+'    .createOrderLine(selCode,bestSupplier.nom,qte,bestSupplier.prixFournisseur);' +
+'}' +
+'function showMsg(t,cls){var el=document.getElementById("msg");el.textContent=t;el.className="msg "+cls;}' +
+'<\/script></body></html>';
+}
+
+
+// ============================================================
+function generateMonthlyReport() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rSheet = ss.getSheetByName(SHEET_REPORTS);
+  if (!rSheet) { SpreadsheetApp.getUi().alert("❌  Lancez d'abord l'initialisation."); return; }
+  rSheet.getRange("A8:H200").clear();
+
+  const salesSheet = ss.getSheetByName(SHEET_SALES);
+  const prodSheet  = ss.getSheetByName(SHEET_PRODUCTS);
+  if (!salesSheet || !prodSheet) return;
+
+  const salesData = salesSheet.getDataRange().getValues();
+  const prodData  = prodSheet.getDataRange().getValues();
+  const paMap = {};
+  for (let i = 1; i < prodData.length; i++) {
+    if (prodData[i][0]) paMap[String(prodData[i][0])] = Number(prodData[i][3])||0;
+  }
+
+  const now = new Date(), cm = now.getMonth(), cy = now.getFullYear();
+  const map = {}; let mTotal=0, mProfit=0;
+
+  for (let i = 1; i < salesData.length; i++) {
+    const r = salesData[i];
+    if (!r[1]||!r[2]) continue;
+    // ★ Exclure les ventes annulées du rapport
+    if (String(r[10]).trim().toUpperCase() === "ANNULÉ") continue;
+    const d = new Date(r[1]);
+    if (d.getMonth()!==cm||d.getFullYear()!==cy) continue;
+    const code=String(r[2]), prixU=Number(r[4])||0, qte=Number(r[5])||0;
+    const total=prixU*qte, profit=(prixU-(paMap[code]||0))*qte;
+    if (!map[code]) map[code]={code,desig:String(r[3])||code,qty:0,total:0,profit:0};
+    map[code].qty+=qte; map[code].total+=total; map[code].profit+=profit;
+    mTotal+=total; mProfit+=profit;
+  }
+
+  const mn = now.toLocaleString("fr-FR",{month:"long",year:"numeric"});
+  const rows = Object.values(map).sort((a,b)=>b.total-a.total);
+
+  rSheet.getRange("A8:E8").merge().setValue("📅  RAPPORT — "+mn.toUpperCase())
+    .setBackground(COLOR_ACCENT).setFontColor("white").setFontWeight("bold").setHorizontalAlignment("center");
+  ["Code","Désignation","Qté","CA (DT)","Profit (DT)"].forEach((h,i)=>{
+    rSheet.getRange(9,i+1).setValue(h).setBackground(COLOR_HEADER_BG).setFontColor("white").setFontWeight("bold").setHorizontalAlignment("center");
+  });
+  rows.forEach((item,i)=>{
+    const r=10+i;
+    rSheet.getRange(r,1).setValue(item.code); rSheet.getRange(r,2).setValue(item.desig);
+    rSheet.getRange(r,3).setValue(item.qty);
+    rSheet.getRange(r,4).setValue(item.total).setNumberFormat('#,##0.000 " DT"');
+    rSheet.getRange(r,5).setValue(item.profit).setNumberFormat('#,##0.000 " DT"');
+    if(i%2===1) rSheet.getRange(r,1,1,5).setBackground(COLOR_ALT_ROW);
+  });
+  const tr=10+rows.length;
+  rSheet.getRange(tr,1,1,3).merge().setValue("TOTAL "+mn.toUpperCase()).setFontWeight("bold").setBackground(COLOR_HEADER_BG).setFontColor("white").setHorizontalAlignment("right");
+  rSheet.getRange(tr,4).setValue(mTotal).setNumberFormat('#,##0.000 " DT"').setFontWeight("bold").setBackground(COLOR_ACCENT).setFontColor("white");
+  rSheet.getRange(tr,5).setValue(mProfit).setNumberFormat('#,##0.000 " DT"').setFontWeight("bold").setBackground(mProfit>=0?"#1B5E20":"#B71C1C").setFontColor("white");
+
+  ss.setActiveSheet(rSheet);
+  SpreadsheetApp.getUi().alert("✅  Rapport généré pour "+mn+"\n"+rows.length+" produits — CA : "+mTotal.toFixed(3)+" DT — Profit : "+mProfit.toFixed(3)+" DT");
+}
+
+
+// ============================================================
+//  14. UTILITAIRES
+// ============================================================
+function formatHeaderRow(sheet, row, numCols) {
+  sheet.getRange(row,1,1,numCols)
+    .setBackground(COLOR_HEADER_BG).setFontColor(COLOR_HEADER_TEXT)
+    .setFontWeight("bold").setFontSize(11)
+    .setHorizontalAlignment("center").setVerticalAlignment("middle").setWrap(true)
+    .setBorder(true,true,true,true,true,true,"#FFFFFF",SpreadsheetApp.BorderStyle.SOLID);
+  sheet.setRowHeight(row,40);
+}
+
+function generateSaleId(sheet) {
+  const data = sheet.getRange("A2:A"+Math.max(sheet.getLastRow(),2)).getValues();
+  let max=0;
+  data.forEach(r=>{const m=String(r[0]).match(/VTE-(\d+)/);if(m)max=Math.max(max,parseInt(m[1]));});
+  return "VTE-"+String(max+1).padStart(3,"0");
+}
+
+
+// ============================================================
+//  FIN DU SCRIPT — Votre Boutique v5.0
+// ============================================================
